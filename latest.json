@@ -1,10 +1,10 @@
 {
-  "version": "9.4.1",
+  "version": "9.4.2",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.1/NghiaEdition_Update_v9.4.1.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.1/NghiaEdition_Update_v9.4.1.zip",
-  "sha256": "43047cda951fa6e066c963922ece2897571b188357829b070b111454e68a0572",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.2/NghiaEdition_Update_v9.4.2.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.2/NghiaEdition_Update_v9.4.2.zip",
+  "sha256": "72fe7a4daa2382f3eaef27d46913dfa6de424d3addccbc48ba702126d1ebb5c4",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "Launcher startup hotfix; C2 Fast Worker, MiuMiu and PC Alarm unchanged"
+  "notes": "Launcher default-start verified on real Windows client; crash log/error dialog added. C2 Fast Worker, MiuMiu and PC Alarm unchanged."
 }
