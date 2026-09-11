@@ -1,0 +1,10 @@
+{
+  "channel": "stable",
+  "min_launcher_version": "1.0.0",
+  "notes": "C2 Fast Worker + Spotify MiuMiu + PC Alarm + one-click updater",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.0/NghiaEdition_Update_v9.4.0.zip",
+  "payload_dir": "app_payload",
+  "sha256": "0317ae517e7b313f3185b30640680ed7d206a8c329b67940cccf15a47cae26a2",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.0/NghiaEdition_Update_v9.4.0.zip",
+  "version": "9.4.0"
+}
