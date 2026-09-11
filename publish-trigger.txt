@@ -1,1 +1,1 @@
-publish v9.4.0 after verified Windows run 34619623349 and SHA-256 payload gate
+publish v9.4.0 after verified Windows run 34619623349, source SHA gate, and deterministic background gate - attempt 4
