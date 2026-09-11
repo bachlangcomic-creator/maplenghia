@@ -1,0 +1,113 @@
+diff --git a/spotify_recovered_core.py b/spotify_recovered_core.py
+index 2260c42..2ebdfa3 100644
+--- a/spotify_recovered_core.py
++++ b/spotify_recovered_core.py
+@@ -242,6 +242,12 @@ SPOTIFY_R54_PIRATE_SWEEP_DIRECTION_MS = (500, 1200)
+ # initial move_to/log -> 1.0 -> 6 -> verification locals -> retry log. This is
+ # the post-move settle before the six-attempt verification/retry block.
+ SPOTIFY_R54_SAFE_MOVE_VERIFY_SETTLE_S = 1.0
++SPOTIFY_SAFE_PENDING = "PENDING"
++SPOTIFY_SAFE_READY = "READY"
++SPOTIFY_SAFE_FAILED = "FAILED"
++SPOTIFY_SAFE_MAX_VERIFY_ATTEMPTS = 6
++SPOTIFY_SAFE_TOLERANCE_X = 6.0
++SPOTIFY_SAFE_TOLERANCE_Y = 9.0
+ SPOTIFY_R54_LOST_POSITION_GRACE_S = 0.1
+ SPOTIFY_R54_LOST_POSITION_RIGHT_FLASH_UNTIL_S = 1.5
+ SPOTIFY_R54_LOST_POSITION_LEFT_FLASH_UNTIL_S = 3.0
+@@ -2634,26 +2640,79 @@ class SpotifyRecoveredCore:
+             return self._spotify_pirate_1hit_farm_step(cfg, map_pos, now)
+         return self._spotify_pirate_normal_farm_step(cfg, map_pos, now)
+ 
++    def _spotify_reset_safe_place_state(self):
++        self.spotify_r54_safe_state = "MOVE_SAFE"
++        self.spotify_r54_safe_arrived_at = 0.0
++        self.spotify_r54_safe_verify_count = 0
++
++    def _spotify_safe_in_tolerance(self, cfg, map_pos):
++        if map_pos is None:
++            return False
++        p = cfg.get("map_profile") or {}
++        sx = p.get("SAFE_PLACE_X")
++        sy = p.get("SAFE_PLACE_Y")
++        if sx is None or sy is None:
++            return False
++        return (
++            abs(float(map_pos[0]) - float(sx)) <= SPOTIFY_SAFE_TOLERANCE_X
++            and abs(float(map_pos[1]) - float(sy)) <= SPOTIFY_SAFE_TOLERANCE_Y
++        )
++
+     def _spotify_safe_place_step(self, cfg, map_pos, now):
+         p = cfg.get("map_profile") or {}
+         sx = p.get("SAFE_PLACE_X")
+         sy = p.get("SAFE_PLACE_Y")
+         if sx is None or sy is None:
++            self.spotify_r54_safe_state = "SAFE_FAIL"
+             self.spotify_r54_safe_arrived_at = 0.0
+-            return True
+-        arrived = self._spotify_move_to_step(
+-            cfg, map_pos, float(sx), float(sy), now, tolerance_x=6.0, tolerance_y=9.0)
+-        if not arrived:
+-            self.spotify_r54_safe_arrived_at = 0.0
+-            return False
+-        # Medium11 resolved: main_farm_worker duplicates the sequence initial
+-        # move_to/log -> 1.0 -> 6 -> verification locals -> retry log. Apply the
+-        # 1.0s settle only after initial arrival and before verification/retry.
+-        if not getattr(self, "spotify_r54_safe_arrived_at", 0.0):
+-            self.spotify_r54_safe_arrived_at = time.monotonic()
+-            return False
+-        if time.monotonic() - self.spotify_r54_safe_arrived_at < SPOTIFY_R54_SAFE_MOVE_VERIFY_SETTLE_S:
+-            return False
+-        self.spotify_r54_safe_arrived_at = 0.0
+-        return True
++            self.spotify_r54_safe_verify_count = SPOTIFY_SAFE_MAX_VERIFY_ATTEMPTS
++            self.release_move()
++            return SPOTIFY_SAFE_FAILED
++
++        state = str(getattr(self, "spotify_r54_safe_state", "MOVE_SAFE") or "MOVE_SAFE").upper()
++        if state == "SAFE_OK":
++            return SPOTIFY_SAFE_READY
++        if state == "SAFE_FAIL":
++            return SPOTIFY_SAFE_FAILED
++
++        if state not in {"MOVE_SAFE", "SETTLE_SAFE", "VERIFY_SAFE"}:
++            self._spotify_reset_safe_place_state()
++            state = "MOVE_SAFE"
++
++        if state == "MOVE_SAFE":
++            arrived = self._spotify_move_to_step(
++                cfg, map_pos, float(sx), float(sy), now,
++                tolerance_x=SPOTIFY_SAFE_TOLERANCE_X,
++                tolerance_y=SPOTIFY_SAFE_TOLERANCE_Y,
++            )
++            if not arrived:
++                self.spotify_r54_safe_arrived_at = 0.0
++                self.spotify_r54_safe_verify_count = 0
++                return SPOTIFY_SAFE_PENDING
++            self.spotify_r54_safe_state = "SETTLE_SAFE"
++            self.spotify_r54_safe_arrived_at = float(now)
++            self.spotify_r54_safe_verify_count = 0
++            return SPOTIFY_SAFE_PENDING
++
++        if state == "SETTLE_SAFE":
++            arrived_at = float(getattr(self, "spotify_r54_safe_arrived_at", 0.0) or 0.0)
++            if float(now) - arrived_at < SPOTIFY_R54_SAFE_MOVE_VERIFY_SETTLE_S:
++                return SPOTIFY_SAFE_PENDING
++            self.spotify_r54_safe_state = "VERIFY_SAFE"
++            state = "VERIFY_SAFE"
++
++        if state == "VERIFY_SAFE":
++            if self._spotify_safe_in_tolerance(cfg, map_pos):
++                self.spotify_r54_safe_state = "SAFE_OK"
++                self.release_move()
++                return SPOTIFY_SAFE_READY
++            count = int(getattr(self, "spotify_r54_safe_verify_count", 0) or 0) + 1
++            self.spotify_r54_safe_verify_count = count
++            if count >= SPOTIFY_SAFE_MAX_VERIFY_ATTEMPTS:
++                self.spotify_r54_safe_state = "SAFE_FAIL"
++                self.release_move()
++                return SPOTIFY_SAFE_FAILED
++            return SPOTIFY_SAFE_PENDING
++
++        return SPOTIFY_SAFE_PENDING
+ 
