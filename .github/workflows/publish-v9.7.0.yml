@@ -1,0 +1,303 @@
+name: Publish Nghia Client v9.7.0 Spotify Detection Watchdog Parity
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Create public v9.7.0 release and publish latest.json'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: '9.7.0'
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout V9.7.0 release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-v9.7.0-detection-watchdog-parity
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download exact public V9.6.0 base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base,portable,out,verify | Out-Null
+          gh release download v9.6.0 --repo $env:REPO -p NghiaClient_V9.6.0_Portable.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'v9.6.0 portable download failed' }
+          @'
+          from pathlib import Path
+          import hashlib,zipfile
+          p=Path('base/NghiaClient_V9.6.0_Portable.zip')
+          want='fd74cb91e63c75dfff07421a4af413da201370b60cde3a615fec09a5c527282c'
+          got=hashlib.sha256(p.read_bytes()).hexdigest()
+          if got != want: raise SystemExit(f'v9.6.0 base hash mismatch: {got} != {want}')
+          with zipfile.ZipFile(p) as z: z.extractall('portable')
+          print('V960_BASE_HASH_OK')
+          '@ | python -
+
+      - name: Verify exact V9.6.0 protected baseline hashes
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib
+          expected={
+           'portable/app_payload/maple_nghia_pro.py':'4a56e090f0e5aef6b1528bcd33b3edd90f80bdf6be6fa400bc7e57db14b26b4c',
+           'portable/app_payload/spotify_recovered_core.py':'24e980c973636a133923e60f9660821aec70535f0b8ee1cfca07ec8b47e43005',
+           'portable/app_payload/spotify_behavior_engine.py':'9a93db3346e846c4e22f13f2a4b9ce3e4cea9269cd26229e5167ed57ebe24a24',
+           'portable/app_payload/spotify_focus_parity.py':'987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1',
+           'portable/app_payload/spotify_miumiu_sell.py':'2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6',
+           'portable/app_payload/spotify_pc_alarm.py':'a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4',
+           'portable/app_payload/NghiaClientApp.exe':'0c0aef9eb6ba8eb3562c73742ee85348ae924b4eabfad1e8f07d13a882986617',
+           'portable/NghiaLauncher.exe':'67d8105b048c647fdc684bcbec8118a86aff61a0f3f00f261d3b4e36ff76c37b',
+          }
+          for p,want in expected.items():
+              got=hashlib.sha256(Path(p).read_bytes()).hexdigest()
+              if got != want: raise SystemExit(f'V9.6 baseline mismatch {p}: {got} != {want}')
+          print('V960_PROTECTED_BASE_HASHES_OK')
+          '@ | python -
+
+      - name: Run protected baseline guards before overlay
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          $env:PYTHONPATH=(Resolve-Path portable/app_payload).Path
+          $env:APP_PAYLOAD=(Resolve-Path portable/app_payload).Path
+          pytest release_payload/v9.7.0/tests/test_v96_regression.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'V9.6 protected baseline guards failed' }
+
+      - name: Apply V9.7.0 overlay
+        shell: pwsh
+        run: |
+          Copy-Item release_payload/v9.7.0/spotify_detection_parity.py portable/app_payload/spotify_detection_parity.py
+          Copy-Item release_payload/v9.7.0/spotify_watchdog.py portable/app_payload/spotify_watchdog.py
+          git apply --check --directory=portable/app_payload release_payload/v9.7.0/spotify_recovered_core.patch
+          if ($LASTEXITCODE -ne 0) { throw 'spotify_recovered_core.patch check failed' }
+          git apply --directory=portable/app_payload release_payload/v9.7.0/spotify_recovered_core.patch
+          git apply --check --directory=portable/app_payload release_payload/v9.7.0/maple_nghia_pro.patch
+          if ($LASTEXITCODE -ne 0) { throw 'maple_nghia_pro.patch check failed' }
+          git apply --directory=portable/app_payload release_payload/v9.7.0/maple_nghia_pro.patch
+          git apply --check --directory=portable/app_payload release_payload/v9.7.0/spotify_behavior_engine.patch
+          if ($LASTEXITCODE -ne 0) { throw 'spotify_behavior_engine.patch check failed' }
+          git apply --directory=portable/app_payload release_payload/v9.7.0/spotify_behavior_engine.patch
+          Write-Host 'V970_OVERLAY_APPLY_OK'
+
+      - name: Compile and run full V9.7.0 regression suite
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          $env:PYTHONPATH=(Resolve-Path portable/app_payload).Path
+          $env:APP_PAYLOAD=(Resolve-Path portable/app_payload).Path
+          pytest release_payload/v9.7.0/tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'V9.7.0 pytest failed' }
+          Write-Host 'V970_PYTEST_OK'
+
+      - name: Verify protected C2 and unchanged component hashes after overlay
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import ast,hashlib
+          def h(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          unchanged={
+           'portable/NghiaLauncher.exe':'67d8105b048c647fdc684bcbec8118a86aff61a0f3f00f261d3b4e36ff76c37b',
+           'portable/app_payload/NghiaClientApp.exe':'0c0aef9eb6ba8eb3562c73742ee85348ae924b4eabfad1e8f07d13a882986617',
+           'portable/app_payload/spotify_focus_parity.py':'987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1',
+           'portable/app_payload/spotify_miumiu_sell.py':'2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6',
+           'portable/app_payload/spotify_pc_alarm.py':'a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4',
+          }
+          for p,want in unchanged.items():
+              got=h(p)
+              if got != want: raise SystemExit(f'protected component changed {p}: {got} != {want}')
+          def fn(path,name):
+              text=Path(path).read_text(encoding='utf-8'); tree=ast.parse(text)
+              for node in ast.walk(tree):
+                  if isinstance(node,ast.FunctionDef) and node.name==name:
+                      return ast.get_source_segment(text,node) or ''
+              raise SystemExit('missing function '+name)
+          core='portable/app_payload/spotify_recovered_core.py'
+          host='portable/app_payload/maple_nghia_pro.py'
+          combo=fn(core,'_spotify_c2_tp_skill_hold_combo')
+          primary=fn(core,'_spotify_primary_skill_step')
+          fast=fn(host,'_c2_fast_farm_worker')
+          text=Path(core).read_text(encoding='utf-8')
+          assert 'SPOTIFY_R54_COMBO_SPAM_ACTION_MS = (20, 50)' in text
+          assert 'SPOTIFY_R54_COMBO_SPAM_WAIT_S = (0.05, 0.15)' in text
+          assert 'SPOTIFY_SIMPLE_HOLD_COMBO_MS = (200, 500)' in text
+          assert 'SPOTIFY_R54_COMBO_SPAM_ACTION_MS' in combo and 'SPOTIFY_R54_COMBO_SPAM_WAIT_S' in combo
+          assert 'SPOTIFY_SIMPLE_HOLD_COMBO_MS' in primary
+          assert '_spotify_cached_game_hwnd' in fast and '_find_game_window' not in fast
+          assert 'watchdog' not in fast.lower() and 'captcha' not in fast.lower() and 'full_bag' not in fast.lower()
+          print('V970_C2_AND_PROTECTED_COMPONENTS_OK')
+          '@ | python -
+
+      - name: Real Windows default-launch smoke
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import json
+          Path('portable/version.json').write_text(json.dumps({'version':'9.7.0'},indent=2)+'\n',encoding='utf-8')
+          crash=Path('portable/user_data/launcher_crash.log')
+          if crash.exists(): crash.unlink()
+          '@ | python -
+          $root=(Resolve-Path 'portable').Path
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            $crash=Join-Path $root 'user_data/launcher_crash.log'
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3; $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V970_REAL_DEFAULT_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path (Join-Path $root 'user_data/launcher_crash.log')) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Package and validate V9.7.0 preflight files
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib,json,shutil,zipfile
+          for d in Path('portable/app_payload').rglob('__pycache__'):
+              shutil.rmtree(d,ignore_errors=True)
+          status={
+            'latest_version':'9.7.0','local_version':'9.7.0',
+            'notes':'Spotify Detection & Watchdog Parity: dedicated watchdog topology and verified safe-place sell gate.',
+            'state':'up_to_date'}
+          Path('portable/user_data/update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          Path('portable/version.json').write_text(json.dumps({'version':'9.7.0'},indent=2)+'\n',encoding='utf-8')
+          shutil.rmtree('update_stage',ignore_errors=True)
+          Path('update_stage').mkdir()
+          shutil.copytree('portable/app_payload','update_stage/app_payload')
+          required_files=[
+           'NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py',
+           'spotify_recovered_core.py','spotify_behavior_engine.py','spotify_focus_parity.py',
+           'spotify_miumiu_sell.py','spotify_pc_alarm.py','spotify_detection_parity.py','spotify_watchdog.py']
+          release={'payload_dir':'app_payload','required_files':required_files,'version':'9.7.0'}
+          Path('update_stage/release.json').write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          def pack(root,out):
+              root=Path(root)
+              with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+                  for p in sorted(root.rglob('*')):
+                      if p.is_file(): z.write(p,p.relative_to(root).as_posix())
+          pack('portable','out/NghiaClient_V9.7.0_Portable.zip')
+          pack('update_stage','out/NghiaEdition_Update_v9.7.0.zip')
+          def h(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          ph=h('out/NghiaClient_V9.7.0_Portable.zip')
+          uh=h('out/NghiaEdition_Update_v9.7.0.zip')
+          if Path('out/NghiaClient_V9.7.0_Portable.zip').stat().st_size < 1_000_000: raise SystemExit('portable unexpectedly small')
+          if Path('out/NghiaEdition_Update_v9.7.0.zip').stat().st_size < 1_000_000: raise SystemExit('update unexpectedly small')
+          with zipfile.ZipFile('out/NghiaClient_V9.7.0_Portable.zip') as z:
+              names=set(z.namelist())
+              assert json.loads(z.read('version.json'))['version']=='9.7.0'
+              assert z.read('NghiaLauncher.exe')[:2]==b'MZ'
+              for n in ('NghiaLauncher.exe','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe','app_payload/spotify_detection_parity.py','app_payload/spotify_watchdog.py'):
+                  assert n in names,n
+          with zipfile.ZipFile('out/NghiaEdition_Update_v9.7.0.zip') as z:
+              names=set(z.namelist())
+              rel=json.loads(z.read('release.json'))
+              assert rel['version']=='9.7.0'
+              assert rel['required_files']==required_files
+              for n in ('app_payload/NghiaClientApp.exe','app_payload/spotify_recovered_core.py','app_payload/spotify_behavior_engine.py','app_payload/spotify_focus_parity.py','app_payload/spotify_detection_parity.py','app_payload/spotify_watchdog.py'):
+                  assert n in names,n
+          manifest={
+           'version':'9.7.0','channel':'stable',
+           'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.7.0/NghiaEdition_Update_v9.7.0.zip',
+           'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.7.0/NghiaEdition_Update_v9.7.0.zip',
+           'sha256':uh,'payload_dir':'app_payload','min_launcher_version':'1.0.1',
+           'notes':'Spotify Detection & Watchdog Parity: dedicated watchdog topology, evidence-gated detector contracts, and six-attempt safe-place verification before MiuMiu sell; C2 timing/focus, MiuMiu seller and PC Alarm behavior preserved.'}
+          Path('out/latest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print('PORTABLE_SHA256='+ph)
+          print('UPDATE_SHA256='+uh)
+          print('V970_PACKAGE_OK')
+          '@ | python -
+
+      - name: Upload private V9.7.0 preflight artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9.7.0-preflight
+          path: |
+            out/NghiaClient_V9.7.0_Portable.zip
+            out/NghiaEdition_Update_v9.7.0.zip
+            out/latest.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Create public stable V9.7.0 release
+        if: ${{ inputs.publish }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v9.7.0 --repo $env:REPO *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v9.7.0 release already exists; refusing to overwrite it' }
+          gh release create v9.7.0 `
+            out/NghiaClient_V9.7.0_Portable.zip `
+            out/NghiaEdition_Update_v9.7.0.zip `
+            --repo $env:REPO `
+            --target release-v9.7.0-detection-watchdog-parity `
+            --title 'Nghia Client v9.7.0 - Spotify Detection & Watchdog Parity' `
+            --notes 'Adds dedicated watchdog topology, evidence-gated Spotify detector contracts, and safe-place settle plus at-most-six verification attempts before MiuMiu selling. Exact Spotify CAPTCHA/full-bag asset parity remains evidence-gated; current Nghĩa template detectors stay labeled fallbacks. C2 timing/focus, MiuMiu seller and PC Alarm are preserved.'
+          if ($LASTEXITCODE -ne 0) { throw 'release creation failed' }
+
+      - name: Verify public V9.7.0 asset hashes
+        if: ${{ inputs.publish }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v9.7.0 --repo $env:REPO -p NghiaClient_V9.7.0_Portable.zip -p NghiaEdition_Update_v9.7.0.zip -D verify
+          if ($LASTEXITCODE -ne 0) { throw 'public asset download failed' }
+          @'
+          from pathlib import Path
+          import hashlib,json
+          def h(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          m=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          assert h('verify/NghiaEdition_Update_v9.7.0.zip')==m['sha256']
+          assert h('verify/NghiaClient_V9.7.0_Portable.zip')==h('out/NghiaClient_V9.7.0_Portable.zip')
+          print('PUBLIC_V970_ASSET_HASHES_OK')
+          '@ | python -
+          $r=gh release view v9.7.0 --repo $env:REPO --json isDraft,isPrerelease,tagName,url | ConvertFrom-Json
+          if ($r.isDraft -or $r.isPrerelease -or $r.tagName -ne 'v9.7.0') { throw 'release not stable/public' }
+          Write-Host "PUBLIC_V970_RELEASE_OK $($r.url)"
+
+      - name: Publish latest.json to main LAST
+        if: ${{ inputs.publish }}
+        shell: pwsh
+        run: |
+          Copy-Item out/latest.json $env:RUNNER_TEMP/latest-v970.json -Force
+          git fetch origin main
+          git switch -C main origin/main
+          Copy-Item $env:RUNNER_TEMP/latest-v970.json latest.json -Force
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add latest.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { throw 'latest.json did not change' }
+          git commit -m 'release: publish v9.7.0 detection watchdog manifest'
+          git push origin main
+          if ($LASTEXITCODE -ne 0) { throw 'latest.json push failed' }
+          Write-Host 'LATEST_JSON_PUBLISHED'
