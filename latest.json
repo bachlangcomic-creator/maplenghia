@@ -1,10 +1,10 @@
 {
-  "version": "9.6.0",
+  "version": "9.7.0",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.6.0/NghiaEdition_Update_v9.6.0.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.6.0/NghiaEdition_Update_v9.6.0.zip",
-  "sha256": "2a3b5f00041119bcbd159f331d7b257744d3222f97e5436b180a596a5a68e8bc",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.7.0/NghiaEdition_Update_v9.7.0.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.7.0/NghiaEdition_Update_v9.7.0.zip",
+  "sha256": "848277a6abf2baba1e9498f22f1800d20dc5833180d282c58c1815b4c5763ed1",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "Spotify Mode Parity: dedicated Bunny, C1 Stand Still, Pirate2 and Pirate2 1-Hit state semantics locked to recovered evidence; C1/B1/B3 retain SIMPLE structure; runtime-validated C2 TP/Skill cadence and Focus Parity A are preserved."
+  "notes": "Spotify Detection & Watchdog Parity: dedicated watchdog topology, evidence-gated detector contracts, and six-attempt safe-place verification before MiuMiu sell; C2 timing/focus, MiuMiu seller and PC Alarm behavior preserved."
 }
