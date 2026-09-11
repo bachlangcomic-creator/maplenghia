@@ -130,8 +130,8 @@ jobs:
           from pathlib import Path
           Path(__file__).with_name("app.marker").write_text("ok", encoding="utf-8")
           '@ | Set-Content -LiteralPath (Join-Path $dir "nghia_spotify_nologin.py") -Encoding UTF8
-          & (Join-Path $dir "NghiaClientApp.exe")
-          if ($LASTEXITCODE -ne 0) { throw "App bootstrap exited with code $LASTEXITCODE" }
+          $proc = Start-Process -FilePath (Join-Path $dir "NghiaClientApp.exe") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "App bootstrap exited with code $($proc.ExitCode)" }
           if (!(Test-Path (Join-Path $dir "app.marker"))) { throw "App bootstrap did not execute adjacent source" }
 
       - name: Smoke execute launcher bootstrap with runtime dependencies
@@ -159,8 +159,8 @@ jobs:
           from pathlib import Path
           Path(__file__).parent.parent.joinpath("launcher.marker").write_text("ok", encoding="utf-8")
           '@ | Set-Content -LiteralPath (Join-Path $dir "launcher/nghia_launcher.py") -Encoding UTF8
-          & (Join-Path $dir "NghiaLauncher.exe")
-          if ($LASTEXITCODE -ne 0) { throw "Launcher bootstrap exited with code $LASTEXITCODE" }
+          $proc = Start-Process -FilePath (Join-Path $dir "NghiaLauncher.exe") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Launcher bootstrap exited with code $($proc.ExitCode)" }
           if (!(Test-Path (Join-Path $dir "launcher.marker"))) { throw "Launcher bootstrap did not execute adjacent source" }
 
       - name: Upload portable executables
