@@ -35,12 +35,53 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Verify staged source payload
+      - name: Reconstruct and verify staged source payload
         shell: bash
         run: |
           set -euo pipefail
-          echo "$SOURCE_SHA256  ci_payload/source_no_bg.zip" | sha256sum -c -
+          cat \
+            ci_payload/source_runtime_lean_parts/part00.b64 \
+            ci_payload/runtime_repair/01a.b64 \
+            ci_payload/runtime_repair/01b.b64 \
+            ci_payload/runtime_repair/01c.b64 \
+            ci_payload/runtime_repair/01d.b64 \
+            ci_payload/source_chunks/part02.b64 \
+            ci_payload/source_runtime_lean_parts/part03.b64 \
+            ci_payload/source_runtime_lean_parts/part04.b64 \
+            ci_payload/source_runtime_lean_parts/part05.b64 \
+            ci_payload/source_chunks/part06.b64 \
+            ci_payload/source_chunks/part07.b64 \
+            ci_payload/runtime_repair/08a.b64 \
+            ci_payload/runtime_repair/08b.b64 \
+            ci_payload/runtime_repair/08c.b64 \
+            ci_payload/runtime_repair/08d.b64 \
+            ci_payload/source_runtime_lean_parts/part09.b64 \
+            ci_payload/source_runtime_lean_parts/part10.b64 \
+            ci_payload/runtime_repair/11a.b64 \
+            ci_payload/runtime_repair/11b.b64 \
+            ci_payload/runtime_repair/11c.b64 \
+            ci_payload/runtime_repair/11d.b64 \
+            ci_payload/runtime_repair/12a.b64 \
+            ci_payload/runtime_repair/12b.b64 \
+            ci_payload/runtime_repair/12c.b64 \
+            ci_payload/runtime_repair/12d.b64 \
+            ci_payload/runtime_repair/13a.b64 \
+            ci_payload/runtime_repair/13b.b64 \
+            ci_payload/runtime_repair/13c.b64 \
+            ci_payload/runtime_repair/13d.b64 \
+            ci_payload/runtime_repair/14a.b64 \
+            ci_payload/runtime_repair/14b.b64 \
+            ci_payload/runtime_repair/14c.b64 \
+            ci_payload/runtime_repair/14d.b64 \
+            ci_payload/runtime_repair/15a.b64 \
+            ci_payload/runtime_repair/15b.b64 \
+            ci_payload/runtime_repair/15c.b64 \
+            ci_payload/runtime_repair/15d.b64 \
+            | tr -d '\r\n' > /tmp/source_runtime_lean.b64
+          base64 -d /tmp/source_runtime_lean.b64 > ci_payload/source_runtime_lean.zip
+          echo "$SOURCE_SHA256  ci_payload/source_runtime_lean.zip" | sha256sum -c -
           echo "$BACKGROUND_SHA256  ci_payload/background.png" | sha256sum -c -
+          test "$(stat -c %s ci_payload/source_runtime_lean.zip)" = "142808"
 
       - name: Expand audited source
         shell: bash
@@ -51,7 +92,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import zipfile
-          src = Path('ci_payload/source_no_bg.zip')
+          src = Path('ci_payload/source_runtime_lean.zip')
           dst = Path('work/src')
           with zipfile.ZipFile(src) as z:
               root = dst.resolve()
