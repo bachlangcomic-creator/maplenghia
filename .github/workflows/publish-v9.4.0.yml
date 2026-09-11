@@ -1,0 +1,231 @@
+name: Publish Nghia Client v9.4.0
+
+on:
+  push:
+    branches:
+      - build-v9.4.0
+    paths:
+      - "publish-trigger.txt"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  VERSION: "9.4.0"
+  BUILD_RUN_ID: "34614900223"
+  REPO: "bachlangcomic-creator/maplenghia"
+  SOURCE_SHA256: "cd74a2c0fd13b452b9c68e0fe4b24c88dd73ef69968dba26a154f3175dcbc631"
+  BACKGROUND_SHA256: "2c4ff2d6592070b8ec5016fc428fdb5aae663ff07980442a534bcca68523ba33"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+        with:
+          ref: build-v9.4.0
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify staged source payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "$SOURCE_SHA256  ci_payload/source_no_bg.zip" | sha256sum -c -
+          echo "$BACKGROUND_SHA256  ci_payload/background.png" | sha256sum -c -
+
+      - name: Expand audited source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf work out exes verify dist_client
+          mkdir -p work/src out exes verify dist_client
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          src = Path('ci_payload/source_no_bg.zip')
+          dst = Path('work/src')
+          with zipfile.ZipFile(src) as z:
+              root = dst.resolve()
+              for info in z.infolist():
+                  target = (dst / info.filename).resolve()
+                  if target != root and root not in target.parents:
+                      raise SystemExit(f'Unsafe source archive entry: {info.filename}')
+              z.extractall(dst)
+          PY
+          cp ci_payload/background.png work/src/app_payload/background.png
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          Path('work/src/version.json').write_text(json.dumps({'version':'9.4.0'}, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Download verified Windows EXEs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view "$BUILD_RUN_ID" --repo "$REPO" --json status,conclusion --jq 'if .status != "completed" or .conclusion != "success" then error("Windows build is not successful") else . end'
+          gh run download "$BUILD_RUN_ID" --repo "$REPO" -n Nghia-V9.4-Portable-EXEs -D exes
+          test -f exes/NghiaLauncher.exe
+          test -f exes/NghiaClientApp.exe
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('NghiaLauncher.exe','NghiaClientApp.exe'):
+              p=Path('exes')/name
+              data=p.read_bytes()
+              if data[:2] != b'MZ' or len(data) < 1024*1024:
+                  raise SystemExit(f'Invalid Windows executable: {name}, size={len(data)}')
+              print(name, len(data))
+          PY
+
+      - name: Assemble portable client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp exes/NghiaLauncher.exe work/src/NghiaLauncher.exe
+          cp exes/NghiaClientApp.exe work/src/app_payload/NghiaClientApp.exe
+          mkdir -p dist_client/user_data
+          cp work/src/NghiaLauncher.exe dist_client/
+          cp work/src/NghiaLauncher.bat dist_client/
+          cp work/src/launcher_config.json dist_client/
+          cp work/src/version.json dist_client/
+          cp -a work/src/launcher dist_client/
+          cp -a work/src/app_payload dist_client/
+          printf 'User settings are stored here and preserved across updates.\n' > dist_client/user_data/README.txt
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('dist_client')
+          out=Path('out/NghiaClient_V9.4.0_Portable.zip')
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file():
+                      z.write(p, p.relative_to(root).as_posix())
+          PY
+
+      - name: Build update package and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd work/src
+          PYTHONPATH=. python tools/make_release.py --version "$VERSION" --app-payload app_payload --output ../../out
+          cd ../..
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, zipfile
+          update=Path('out/NghiaEdition_Update_v9.4.0.zip')
+          portable=Path('out/NghiaClient_V9.4.0_Portable.zip')
+          manifest=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          digest=hashlib.sha256(update.read_bytes()).hexdigest()
+          assert manifest['version']=='9.4.0'
+          assert manifest['sha256']==digest
+          assert manifest['package_url']=='https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.0/NghiaEdition_Update_v9.4.0.zip'
+          for p in (update, portable):
+              assert p.is_file() and p.stat().st_size > 1_000_000, (p, p.stat().st_size)
+          with zipfile.ZipFile(update) as z:
+              names=set(z.namelist())
+              for required in ('release.json','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py','app_payload/spotify_recovered_core.py'):
+                  assert required in names, required
+          with zipfile.ZipFile(portable) as z:
+              names=set(z.namelist())
+              for required in ('NghiaLauncher.exe','version.json','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py'):
+                  assert required in names, required
+          print('UPDATE_SHA256='+digest)
+          print('PORTABLE_SHA256='+hashlib.sha256(portable.read_bytes()).hexdigest())
+          PY
+
+      - name: Ensure release tag does not already exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; refusing to overwrite it."
+            exit 1
+          fi
+
+      - name: Create public GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" \
+            out/NghiaEdition_Update_v9.4.0.zip \
+            out/NghiaClient_V9.4.0_Portable.zip \
+            --repo "$REPO" \
+            --target main \
+            --title "Nghia Client v9.4.0" \
+            --notes "Nghia Client v9.4.0\n\n- C2 Fast Worker\n- Spotify MiuMiu parity\n- Spotify PC Alarm\n- Portable NghiaLauncher.exe + NghiaClientApp.exe\n- Auto-check update on startup; installs only when CẬP NHẬT is clicked\n- SHA-256 verification, A/B staging, rollback and user_data preservation"
+
+      - name: Re-download public release asset and verify SHA-256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "v$VERSION" --repo "$REPO" -p NghiaEdition_Update_v9.4.0.zip -D verify
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+          manifest=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          asset=Path('verify/NghiaEdition_Update_v9.4.0.zip')
+          digest=hashlib.sha256(asset.read_bytes()).hexdigest()
+          if digest != manifest['sha256']:
+              raise SystemExit(f'Release SHA mismatch: {digest} != {manifest["sha256"]}')
+          print('PUBLIC_RELEASE_SHA256_OK='+digest)
+          PY
+
+      - name: Publish latest.json to main LAST
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp out/latest.json /tmp/latest.json
+          git fetch origin main
+          git switch main
+          cp /tmp/latest.json latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git commit -m "release: publish v9.4.0 update manifest"
+          git push origin main
+
+      - name: Verify published manifest and release metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "v$VERSION" --repo "$REPO" --json isDraft,isPrerelease,tagName,url --jq 'if .isDraft or .isPrerelease or .tagName != "v9.4.0" then error("release is not public stable v9.4.0") else . end'
+          gh api "repos/$REPO/contents/latest.json?ref=main" --jq .content | tr -d '\n' | base64 -d > /tmp/published-latest.json
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          expected=json.loads(Path('/tmp/latest.json').read_text(encoding='utf-8'))
+          actual=json.loads(Path('/tmp/published-latest.json').read_text(encoding='utf-8'))
+          if actual != expected:
+              raise SystemExit('Published latest.json differs from verified release manifest')
+          print('PUBLISHED_LATEST_JSON_OK')
+          PY
+
+      - name: Upload publication evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-v9.4.0-Publication-Evidence
+          path: |
+            out/latest.json
+            out/NghiaEdition_Update_v9.4.0.zip
+            out/NghiaClient_V9.4.0_Portable.zip
+          if-no-files-found: error
+          retention-days: 7
