@@ -1,0 +1,165 @@
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -34,6 +34,12 @@
+     DIRECT_INPUT_AVAILABLE = False
+ 
+ from spotify_behavior_engine import SpotifyBehaviorEngine
++from spotify_focus_parity import (
++    SpotifyFocusCache,
++    SPOTIFY_WINDOW_TITLE_EXACT,
++    FOCUS_PARITY_MIGRATION_KEY,
++    focus_parity_enabled_from_config,
++)
+ from spotify_miumiu_sell import SpotifyMiuMiuSeller, SELL_THRESHOLD as SPOTIFY_SELL_THRESHOLD
+ from spotify_pc_alarm import (
+     play_spotify_pc_alarm,
+@@ -340,6 +346,13 @@
+         self.c2_fast_last_seen = 0.0
+         self.c2_fast_supervisor_pause = False
+         self.c2_fast_capture_failures = 0
++        # Spotify Focus Parity A: the dedicated 0.2s worker owns all Win32
++        # focus lookups. Combat/C2 hot paths only read this cache.
++        self.spotify_focus_cache = SpotifyFocusCache(
++            self._spotify_find_exact_window,
++            self._spotify_get_foreground_window,
++            self._spotify_force_focus_hwnd_parity,
++        )
+         super().__init__()
+         self.title("Nghĩa Edition V9.3 • Spotify Recovered Core • C2 Adaptive Y")
+         self.geometry("1280x820")
+@@ -436,7 +449,7 @@
+         self.spotify_runtime_parity_mode = tk.BooleanVar(value=True)
+         # Original Spotify has a dedicated ~0.2s focus-enforcer worker. Keep it
+         # opt-in because it actively steals foreground focus from other apps.
+-        self.spotify_force_focus_parity = tk.BooleanVar(value=False)
++        self.spotify_force_focus_parity = tk.BooleanVar(value=True)
+         # Nghĩa extension: C2 may learn its minimap lane Y from stable runtime samples.
+         # ON by default for stability; turn OFF for fixed-Y Spotify parity.
+         self.c2_adaptive_y_enabled = tk.BooleanVar(value=True)
+@@ -1384,6 +1397,68 @@
+             )
+             self._log(f"Test phím lỗi: {key} - {self._last_input_error}")
+ 
++    def _spotify_find_exact_window(self, title):
++        """Resolve an exact title with FindWindowW only (no EnumWindows scan)."""
++        title = str(title or "").strip()
++        if not title:
++            return None
++        try:
++            hwnd = user32.FindWindowW(None, title)
++            return int(hwnd) if hwnd else None
++        except Exception as e:
++            self._last_input_error = f"Spotify FindWindowW: {e}"
++            return None
++
++    @staticmethod
++    def _spotify_get_foreground_window():
++        try:
++            hwnd = user32.GetForegroundWindow()
++            return int(hwnd) if hwnd else None
++        except Exception:
++            return None
++
++    def _spotify_force_focus_hwnd_parity(self, hwnd):
++        """Spotify-style lightweight focus restore used only by the 0.2s worker.
++
++        The original binary exposes FindWindowW/ShowWindow/SetWindowPos/
++        SetForegroundWindow around its dedicated focus worker.  Keep the heavier
++        AttachThreadInput/ALT workaround out of this parity path.
++        """
++        if not hwnd:
++            return False
++        try:
++            hwnd = int(hwnd)
++            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
++            HWND_TOPMOST = -1
++            SWP_NOSIZE = 0x0001
++            SWP_NOMOVE = 0x0002
++            SWP_SHOWWINDOW = 0x0040
++            user32.SetWindowPos(
++                hwnd, HWND_TOPMOST, 0, 0, 0, 0,
++                SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW,
++            )
++            user32.SetForegroundWindow(hwnd)
++            return bool(user32.GetForegroundWindow() == hwnd)
++        except Exception as e:
++            self._last_input_error = f"Spotify focus parity: {e}"
++            return False
++
++    def _spotify_focus_refresh(self, cfg, force=True):
++        """Worker-side refresh. This is the only normal runtime Win32 focus lookup."""
++        cache = self.spotify_focus_cache
++        return bool(cache.refresh(
++            configured_title=str(cfg.get("window_title", "") or ""),
++            fixed_title=SPOTIFY_WINDOW_TITLE_EXACT,
++            force=bool(force),
++        ))
++
++    def _spotify_cached_game_has_focus(self):
++        """Hot-path focus read: no FindWindowW, EnumWindows or foreground API."""
++        return bool(self.spotify_focus_cache.cached_has_focus())
++
++    def _spotify_cached_game_hwnd(self):
++        return self.spotify_focus_cache.cached_hwnd()
++
+     def _find_game_window(self, title_substring):
+         needle = (title_substring or "").strip().lower()
+         if not needle:
+@@ -1508,10 +1583,13 @@
+             return False
+ 
+     def _game_has_focus(self, cfg):
+-        """Return True only when the configured Maple HWND is foreground.
++        """Return current focus state. Parity A uses worker-owned cached state."""
++        if bool(cfg.get("spotify_force_focus_parity", False)):
++            ok = self._spotify_cached_game_has_focus()
++            if not ok:
++                self._last_input_error = "Spotify focus cache: game chưa ở foreground"
++            return ok
+ 
+-        Unlike _focus_hwnd(), this method is passive: it never steals focus.
+-        """
+         hwnd, _ = self._find_game_window(cfg.get("window_title", ""))
+         if not hwnd:
+             self._last_input_error = "không tìm thấy cửa sổ game"
+@@ -1529,8 +1607,11 @@
+             return False
+ 
+     def _focus_game(self, cfg):
+-        # With the passive fail-safe enabled, input is allowed only while Maple is
+-        # already foreground. START still focuses the game once explicitly.
++        # Spotify Focus Parity A: combat/C2 never performs a window lookup or steals
++        # focus itself. The dedicated 0.2s worker owns FindWindowW + foreground restore.
++        if bool(cfg.get("spotify_force_focus_parity", False)):
++            return self._spotify_cached_game_has_focus()
++        # Legacy/passive mode remains available after the one-time migration.
+         if cfg.get("pause_on_focus_loss", True):
+             return self._game_has_focus(cfg)
+         if not cfg.get("focus_before_input"):
+@@ -1906,6 +1987,7 @@
+             "pause_on_focus_loss": bool(self.pause_on_focus_loss.get()),
+             "spotify_runtime_parity_mode": bool(self.spotify_runtime_parity_mode.get()),
+             "spotify_force_focus_parity": bool(self.spotify_force_focus_parity.get()),
++            FOCUS_PARITY_MIGRATION_KEY: True,
+             "c2_adaptive_y_enabled": bool(self.c2_adaptive_y_enabled.get()),
+             "input_backend": self.input_backend.get().strip(),
+             # Spotify main_farm_worker names/semantics. loot_time is seconds.
+@@ -1967,6 +2049,7 @@
+             "pause_on_focus_loss": self.pause_on_focus_loss.get(),
+             "spotify_runtime_parity_mode": self.spotify_runtime_parity_mode.get(),
+             "spotify_force_focus_parity": self.spotify_force_focus_parity.get(),
++            FOCUS_PARITY_MIGRATION_KEY: True,
+             "c2_adaptive_y_enabled": self.c2_adaptive_y_enabled.get(),
+             "input_backend": self.input_backend.get(),
+             "auto_loot": self.auto_loot.get(),
+@@ -2041,6 +2124,10 @@
+                 for name in bool_vars:
+                     if name in d and hasattr(self, name):
+                         getattr(self, name).set(bool(d[name]))
++                # v9.4.x -> Focus Parity A migration. Existing configs saved the old
++                # opt-in flag as false; enable the new cached worker once, then persist
++                # a marker so later explicit user choices are respected.
++                self.spotify_force_focus_parity.set(focus_parity_enabled_from_config(d))
+                 # Single-toggle migration: legacy configs may contain this hidden flag as false.
+                 # Auto Sell now always uses SpotifyMiuMiuSeller; self.auto_sell is the sole master switch.
+                 self.spotify_miumiu_sell_enabled.set(True)
