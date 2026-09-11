@@ -1,0 +1,47 @@
+name: Bootstrap V9.8 implementation sync
+
+on:
+  push:
+    branches:
+      - release-v9.8.0-exact-detector-watchdog-recovery
+    paths:
+      - sync/v9.8-bootstrap-ready.txt
+
+permissions:
+  contents: write
+
+jobs:
+  apply-series:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout V9.8 branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-v9.8.0-exact-detector-watchdog-recovery
+          fetch-depth: 0
+
+      - name: Reassemble and apply TDD commit series
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat sync/v9.8-bootstrap-part01.txt \
+              sync/v9.8-bootstrap-part02.txt \
+              sync/v9.8-bootstrap-part03.txt \
+              sync/v9.8-bootstrap-part04.txt > /tmp/v9.8-bootstrap.patch
+          git config user.name 'OpenAI'
+          git config user.email 'noreply@openai.com'
+          git am --3way /tmp/v9.8-bootstrap.patch
+
+      - name: Remove temporary bootstrap files and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f \
+            .github/workflows/bootstrap-v9.8-sync.yml \
+            sync/v9.8-bootstrap-part01.txt \
+            sync/v9.8-bootstrap-part02.txt \
+            sync/v9.8-bootstrap-part03.txt \
+            sync/v9.8-bootstrap-part04.txt \
+            sync/v9.8-bootstrap-ready.txt
+          git commit -m 'chore: remove v9.8 bootstrap sync'
+          git push origin HEAD:release-v9.8.0-exact-detector-watchdog-recovery
