@@ -1,4 +1,4 @@
-name: Trigger V9.7.0 Preflight Once
+name: Trigger V9.7.0 Publish Once
 
 on:
   push:
@@ -10,15 +10,14 @@ permissions:
   contents: read
 
 jobs:
-  dispatch-preflight:
+  dispatch-publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch publish workflow with publish=false
+      - name: Dispatch publish workflow with publish=true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # default-branch resolver now exists; dispatch the release-branch workflow
           gh workflow run publish-v9.7.0.yml \
             --repo bachlangcomic-creator/maplenghia \
             --ref release-v9.7.0-detection-watchdog-parity \
-            -f publish=false
+            -f publish=true
