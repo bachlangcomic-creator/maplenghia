@@ -1,10 +1,10 @@
 {
-  "version": "9.5.0",
+  "version": "9.6.0",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.5.0/NghiaEdition_Update_v9.5.0.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.5.0/NghiaEdition_Update_v9.5.0.zip",
-  "sha256": "22ab93ba1e1c0f45c1dd28ce41210edf1f606a6b3448f103b86fb484ea855cb2",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.6.0/NghiaEdition_Update_v9.6.0.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.6.0/NghiaEdition_Update_v9.6.0.zip",
+  "sha256": "2a3b5f00041119bcbd159f331d7b257744d3222f97e5436b180a596a5a68e8bc",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "Spotify Focus Parity A: dedicated 0.2s FindWindowW focus worker with cached HWND/foreground state; C2 timing, MiuMiu and PC Alarm unchanged."
+  "notes": "Spotify Mode Parity: dedicated Bunny, C1 Stand Still, Pirate2 and Pirate2 1-Hit state semantics locked to recovered evidence; C1/B1/B3 retain SIMPLE structure; runtime-validated C2 TP/Skill cadence and Focus Parity A are preserved."
 }
