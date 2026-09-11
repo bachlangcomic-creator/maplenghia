@@ -1,0 +1,272 @@
+name: Publish Nghia Client v9.4.1 Hotfix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-v9.4.1
+    paths:
+      - "publish-trigger-v9.4.1.txt"
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  VERSION: "9.4.1"
+  LAUNCHER_VERSION: "1.0.1"
+  HOTFIX_RUN_ID: "34632495326"
+  BASE_PUBLICATION_RUN_ID: "34631028546"
+  REPO: "bachlangcomic-creator/maplenghia"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: build-v9.4.1
+          fetch-depth: 0
+
+      - name: Download verified v9.4.0 publication evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view "$BASE_PUBLICATION_RUN_ID" --repo "$REPO" --json status,conclusion --jq 'if .status != "completed" or .conclusion != "success" then error("Base v9.4.0 publication run is not successful") else . end'
+          gh run download "$BASE_PUBLICATION_RUN_ID" --repo "$REPO" -n Nghia-v9.4.0-Publication-Evidence -D base
+          test -f base/NghiaClient_V9.4.0_Portable.zip
+          test -f base/NghiaEdition_Update_v9.4.0.zip
+
+      - name: Download verified fixed launcher
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view "$HOTFIX_RUN_ID" --repo "$REPO" --json status,conclusion --jq 'if .status != "completed" or .conclusion != "success" then error("Launcher hotfix build is not successful") else . end'
+          gh run download "$HOTFIX_RUN_ID" --repo "$REPO" -n Nghia-V9.4.1-Fixed-Launcher -D hotfix
+          test -f hotfix/NghiaLauncher.exe
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('hotfix/NghiaLauncher.exe')
+          data=p.read_bytes()
+          if data[:2] != b'MZ' or len(data) < 1024*1024:
+              raise SystemExit(f'Invalid hotfix launcher: size={len(data)}')
+          print('HOTFIX_LAUNCHER_SIZE='+str(len(data)))
+          PY
+
+      - name: Assemble v9.4.1 portable client
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist_client out verify update_root
+          mkdir -p dist_client out verify update_root
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          src=Path('base/NghiaClient_V9.4.0_Portable.zip')
+          dst=Path('dist_client')
+          with zipfile.ZipFile(src) as z:
+              root=dst.resolve()
+              for info in z.infolist():
+                  target=(dst/info.filename).resolve()
+                  if target != root and root not in target.parents:
+                      raise SystemExit(f'Unsafe base portable entry: {info.filename}')
+              z.extractall(dst)
+          PY
+          cp hotfix/NghiaLauncher.exe dist_client/NghiaLauncher.exe
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('dist_client')
+          cfg=json.loads((root/'launcher_config.json').read_text(encoding='utf-8'))
+          cfg['launcher_version']='1.0.1'
+          (root/'launcher_config.json').write_text(json.dumps(cfg, indent=2, ensure_ascii=False)+'\n', encoding='utf-8')
+          (root/'version.json').write_text(json.dumps({'version':'9.4.1'}, indent=2)+'\n', encoding='utf-8')
+          required=[
+              root/'NghiaLauncher.exe',
+              root/'launcher/nghia_launcher.py',
+              root/'app_payload/NghiaClientApp.exe',
+              root/'app_payload/nghia_spotify_nologin.py',
+              root/'app_payload/spotify_recovered_core.py',
+          ]
+          for p in required:
+              if not p.is_file():
+                  raise SystemExit(f'Missing portable file: {p}')
+          PY
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path('dist_client')
+          out=Path('out/NghiaClient_V9.4.1_Portable.zip')
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file():
+                      z.write(p,p.relative_to(root).as_posix())
+          PY
+
+      - name: Build v9.4.1 update package and latest manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a dist_client/app_payload update_root/app_payload
+          python - <<'PY'
+          from pathlib import Path
+          import json, zipfile, hashlib
+          root=Path('update_root')
+          required=[
+              'NghiaClientApp.exe',
+              'nghia_spotify_nologin.py',
+              'maple_nghia_pro.py',
+              'spotify_recovered_core.py',
+              'spotify_behavior_engine.py',
+              'spotify_miumiu_sell.py',
+              'spotify_pc_alarm.py',
+          ]
+          release={
+              'payload_dir':'app_payload',
+              'required_files':required,
+              'version':'9.4.1',
+          }
+          (root/'release.json').write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          out=Path('out/NghiaEdition_Update_v9.4.1.zip')
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file():
+                      z.write(p,p.relative_to(root).as_posix())
+          digest=hashlib.sha256(out.read_bytes()).hexdigest()
+          manifest={
+              'version':'9.4.1',
+              'channel':'stable',
+              'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.1/NghiaEdition_Update_v9.4.1.zip',
+              'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.1/NghiaEdition_Update_v9.4.1.zip',
+              'sha256':digest,
+              'payload_dir':'app_payload',
+              'min_launcher_version':'1.0.1',
+              'notes':'Launcher startup hotfix; C2 Fast Worker, MiuMiu and PC Alarm unchanged',
+          }
+          Path('out/latest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print('UPDATE_SHA256='+digest)
+          print('PORTABLE_SHA256='+hashlib.sha256(Path('out/NghiaClient_V9.4.1_Portable.zip').read_bytes()).hexdigest())
+          PY
+
+      - name: Validate final archives before release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json, zipfile, hashlib
+          update=Path('out/NghiaEdition_Update_v9.4.1.zip')
+          portable=Path('out/NghiaClient_V9.4.1_Portable.zip')
+          manifest=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          for p in (update,portable):
+              if not p.is_file() or p.stat().st_size < 1_000_000:
+                  raise SystemExit(f'Invalid archive: {p}')
+          if hashlib.sha256(update.read_bytes()).hexdigest() != manifest['sha256']:
+              raise SystemExit('Manifest SHA does not match update package')
+          with zipfile.ZipFile(update) as z:
+              names=set(z.namelist())
+              for name in ('release.json','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py','app_payload/spotify_recovered_core.py'):
+                  if name not in names: raise SystemExit(f'Missing update member: {name}')
+              rel=json.loads(z.read('release.json').decode('utf-8'))
+              if rel.get('version') != '9.4.1': raise SystemExit('Wrong release version')
+          with zipfile.ZipFile(portable) as z:
+              names=set(z.namelist())
+              for name in ('NghiaLauncher.exe','version.json','launcher_config.json','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe'):
+                  if name not in names: raise SystemExit(f'Missing portable member: {name}')
+              version=json.loads(z.read('version.json').decode('utf-8'))
+              cfg=json.loads(z.read('launcher_config.json').decode('utf-8'))
+              if version.get('version') != '9.4.1': raise SystemExit('Portable version is wrong')
+              if cfg.get('launcher_version') != '1.0.1': raise SystemExit('Portable launcher_version is wrong')
+          print('FINAL_ARCHIVES_OK')
+          PY
+
+      - name: Ensure v9.4.1 does not already exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists; refusing to overwrite"
+            exit 1
+          fi
+
+      - name: Create public v9.4.1 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" \
+            out/NghiaEdition_Update_v9.4.1.zip \
+            out/NghiaClient_V9.4.1_Portable.zip \
+            --repo "$REPO" \
+            --target main \
+            --title "Nghia Client v9.4.1" \
+            --notes "Launcher startup hotfix. Fixes NghiaLauncher.exe closing immediately because the launcher package was executed without package context. C2 Fast Worker, Spotify MiuMiu and PC Alarm are unchanged. v9.4.0 users should download the v9.4.1 portable client once; future payload updates can use the CẬP NHẬT button."
+
+      - name: Re-download public update asset and verify SHA-256
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "v$VERSION" --repo "$REPO" -p NghiaEdition_Update_v9.4.1.zip -D verify
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          manifest=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          asset=Path('verify/NghiaEdition_Update_v9.4.1.zip')
+          digest=hashlib.sha256(asset.read_bytes()).hexdigest()
+          if digest != manifest['sha256']:
+              raise SystemExit(f'Public release SHA mismatch: {digest}')
+          print('PUBLIC_RELEASE_SHA256_OK='+digest)
+          PY
+
+      - name: Publish latest.json to main LAST
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp out/latest.json /tmp/latest.json
+          git fetch origin main
+          git switch main
+          cp /tmp/latest.json latest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git commit -m "release: publish v9.4.1 launcher hotfix"
+          git push origin main
+
+      - name: Verify public stable release and published manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "v$VERSION" --repo "$REPO" --json isDraft,isPrerelease,tagName,url --jq 'if .isDraft or .isPrerelease or .tagName != "v9.4.1" then error("release is not public stable v9.4.1") else . end'
+          gh api "repos/$REPO/contents/latest.json?ref=main" --jq .content | tr -d '\n' | base64 -d > /tmp/published-latest.json
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          expected=json.loads(Path('/tmp/latest.json').read_text(encoding='utf-8'))
+          actual=json.loads(Path('/tmp/published-latest.json').read_text(encoding='utf-8'))
+          if actual != expected: raise SystemExit('Published latest.json differs from verified manifest')
+          print('PUBLISHED_LATEST_JSON_OK')
+          PY
+
+      - name: Upload v9.4.1 publication evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-v9.4.1-Publication-Evidence
+          path: |
+            out/latest.json
+            out/NghiaEdition_Update_v9.4.1.zip
+            out/NghiaClient_V9.4.1_Portable.zip
+          if-no-files-found: error
+          retention-days: 7
