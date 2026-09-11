@@ -1,0 +1,180 @@
+name: Build Nghia v9.4.2 Maple Icon Launcher
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-v9.4.2-icon
+    paths:
+      - "ci/icon_parts/**"
+      - "ci/launcher_bootstrap.py"
+      - ".github/workflows/build-v9.4.2-maple-icon.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout icon branch
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install nuitka ordered-set zstandard pillow "requests>=2.32,<3"
+
+      - name: Reconstruct and verify approved icon
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import base64, hashlib
+          from PIL import Image
+
+          parts = sorted(Path('ci/icon_parts').glob('part*.b64'))
+          assert len(parts) == 6, f'Expected 6 icon chunks, got {len(parts)}'
+          encoded = ''.join(p.read_text(encoding='utf-8').strip() for p in parts)
+          data = base64.b64decode(encoded, validate=True)
+          digest = hashlib.sha256(data).hexdigest()
+          expected = '740248b23020a54c486c35a02b30d9bad32fd1b97fde1113ed8d28a952112c00'
+          assert digest == expected, f'Icon PNG SHA mismatch: {digest}'
+          png = Path('ci/nghia_launcher_icon.png')
+          png.write_bytes(data)
+          im = Image.open(png).convert('RGBA')
+          assert im.size == (256, 256), im.size
+          ico = Path('ci/nghia_launcher_icon.ico')
+          im.save(ico, format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+          assert ico.stat().st_size > 10000
+          print(f'ICON_SOURCE_OK sha256={digest} ico_bytes={ico.stat().st_size}')
+          '@ | python -
+
+      - name: Build NghiaLauncher.exe with approved icon
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          python -m nuitka `
+            --onefile `
+            --standalone `
+            --assume-yes-for-downloads `
+            --windows-console-mode=disable `
+            --windows-icon-from-ico=ci/nghia_launcher_icon.ico `
+            --include-package=requests `
+            --include-package=urllib `
+            --include-module=argparse `
+            --include-module=dataclasses `
+            --include-module=datetime `
+            --include-module=hashlib `
+            --include-module=hmac `
+            --include-module=json `
+            --include-module=secrets `
+            --include-module=shutil `
+            --include-module=stat `
+            --include-module=subprocess `
+            --include-module=threading `
+            --include-module=zipfile `
+            --output-filename=NghiaLauncher.exe `
+            --output-dir=dist `
+            --remove-output `
+            ci/launcher_bootstrap.py
+          if (!(Test-Path "dist/NghiaLauncher.exe")) { throw "NghiaLauncher.exe was not produced" }
+
+      - name: Verify PE and embedded icon resource
+        shell: pwsh
+        run: |
+          $launcher = [IO.File]::ReadAllBytes("dist/NghiaLauncher.exe")
+          if ($launcher[0] -ne 0x4D -or $launcher[1] -ne 0x5A) { throw "Launcher EXE missing MZ header" }
+          if ($launcher.Length -lt 1048576) { throw "Launcher EXE is unexpectedly small" }
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path "dist/NghiaLauncher.exe").Path
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          if ($null -eq $icon) { throw "No associated icon resource found" }
+          $bmp = $icon.ToBitmap()
+          if ($bmp.Width -lt 16 -or $bmp.Height -lt 16) { throw "Embedded icon is unexpectedly small" }
+          $bmp.Save((Join-Path (Resolve-Path "dist").Path "extracted-icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+          $bmp.Dispose()
+          $icon.Dispose()
+          @'
+          from PIL import Image
+          from pathlib import Path
+          import math
+
+          target = Image.open('ci/nghia_launcher_icon.png').convert('RGB').resize((32,32))
+          actual = Image.open('dist/extracted-icon.png').convert('RGB').resize((32,32))
+          diffs = []
+          for a, b in zip(target.getdata(), actual.getdata()):
+              diffs.extend(abs(x-y) for x,y in zip(a,b))
+          mae = sum(diffs) / len(diffs)
+          r,g,b = [sum(px[i] for px in actual.getdata()) / (32*32) for i in range(3)]
+          print(f'EMBEDDED_ICON_MAE={mae:.3f} avg_rgb=({r:.1f},{g:.1f},{b:.1f})')
+          assert mae < 55, f'Embedded icon does not resemble approved icon enough: MAE={mae}'
+          assert r > g and r > b, f'Embedded icon does not preserve warm/orange palette: {(r,g,b)}'
+          '@ | python -
+          Get-Item dist/NghiaLauncher.exe | Format-Table Name,Length
+
+      - name: Download real production v9.4.2 portable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base | Out-Null
+          gh release download v9.4.2 --repo bachlangcomic-creator/maplenghia -p NghiaClient_V9.4.2_Portable.zip -D base
+          if (!(Test-Path "base/NghiaClient_V9.4.2_Portable.zip")) { throw "v9.4.2 portable is missing" }
+          Expand-Archive -LiteralPath base/NghiaClient_V9.4.2_Portable.zip -DestinationPath real-client -Force
+          Copy-Item dist/NghiaLauncher.exe real-client/NghiaLauncher.exe -Force
+
+      - name: Real-package check-only smoke
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "real-client").Path
+          $proc = Start-Process -FilePath (Join-Path $root "NghiaLauncher.exe") -WorkingDirectory $root -ArgumentList @("--check-only", "--root", $root) -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Launcher exited with code $($proc.ExitCode)" }
+          $statusPath = Join-Path $root "user_data/update_status.json"
+          if (!(Test-Path $statusPath)) { throw "Launcher did not execute the real launcher package" }
+          $status = Get-Content -Raw -LiteralPath $statusPath | ConvertFrom-Json
+          $allowed = @("up_to_date", "update_available", "offline_or_error", "launcher_update_required")
+          if ($allowed -notcontains $status.state) { throw "Unexpected launcher status: $($status.state)" }
+          if ($status.local_version -ne "9.4.2") { throw "Wrong root/version resolution: $($status.local_version)" }
+          Write-Host "REAL_PACKAGE_CHECK_ONLY_OK state=$($status.state) local=$($status.local_version)"
+
+      - name: Real default-launch smoke
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "real-client").Path
+          $crash = Join-Path $root "user_data/launcher_crash.log"
+          if (Test-Path $crash) { Remove-Item $crash -Force }
+          $launcherExe = Join-Path $root "NghiaLauncher.exe"
+          $launcherProc = Start-Process -FilePath $launcherExe -WorkingDirectory $root -PassThru
+          $deadline = (Get-Date).AddSeconds(35)
+          $appProc = $null
+          while ((Get-Date) -lt $deadline) {
+            $apps = @(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $appProc = $apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw "Launcher wrote launcher_crash.log before app start" }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $appProc) { throw "Real NghiaClientApp.exe did not start within 35 seconds" }
+          Write-Host "REAL_DEFAULT_LAUNCH_OK PID=$($appProc.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$launcherProc.HasExited) { Stop-Process -Id $launcherProc.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { Get-Content $crash; throw "launcher_crash.log exists after default-launch smoke" }
+
+      - name: Upload verified icon launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: NghiaLauncher-v9.4.2-MapleIcon
+          path: |
+            dist/NghiaLauncher.exe
+            dist/extracted-icon.png
+            ci/nghia_launcher_icon.png
+          if-no-files-found: error
+          retention-days: 14
