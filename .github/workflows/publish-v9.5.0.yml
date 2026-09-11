@@ -42,7 +42,7 @@ jobs:
           if ($run.status -ne 'completed' -or $run.conclusion -ne 'success') { throw 'Maple icon launcher build is not green' }
           gh run download $env:ICON_RUN_ID --repo $env:REPO -n NghiaLauncher-v9.4.2-MapleIcon -D icon
           if (!(Test-Path 'base/NghiaClient_V9.4.2_Portable.zip')) { throw 'v9.4.2 portable base missing' }
-          if (!(Test-Path 'icon/NghiaLauncher.exe')) { throw 'verified Maple icon launcher missing' }
+          if (!(Test-Path 'icon/dist/NghiaLauncher.exe')) { throw 'verified Maple icon launcher missing' }
 
       - name: Reconstruct v9.5.0 Focus Parity A candidate
         shell: pwsh
@@ -86,10 +86,10 @@ jobs:
               if got != want:
                   raise SystemExit(f'base hash mismatch {p}: {got} != {want}')
 
-          icon_sha = sha('icon/NghiaLauncher.exe')
+          icon_sha = sha('icon/dist/NghiaLauncher.exe')
           if icon_sha != '67d8105b048c647fdc684bcbec8118a86aff61a0f3f00f261d3b4e36ff76c37b':
               raise SystemExit('Maple icon launcher hash mismatch: ' + icon_sha)
-          shutil.copy2('icon/NghiaLauncher.exe', 'portable/NghiaLauncher.exe')
+          shutil.copy2('icon/dist/NghiaLauncher.exe', 'portable/NghiaLauncher.exe')
           '@ | python -
 
           git apply --check --directory=portable/app_payload release_payload/v9.5.0/maple_nghia_pro.patch
@@ -310,4 +310,4 @@ jobs:
           print('PRODUCTION_V950_OK')
           '@ | python -
 
-# trigger commit: 2026-09-12
+# fix artifact nested dist path
