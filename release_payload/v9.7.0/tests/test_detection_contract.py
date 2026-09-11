@@ -1,6 +1,5 @@
 import importlib
 
-import numpy as np
 import pytest
 
 
@@ -23,13 +22,21 @@ def test_recovered_detector_constants_are_not_conflated():
     assert d.SOURCE_NGHIA_FALLBACK == "nghia_fallback"
 
 
+class FakeFrame:
+    def __getitem__(self, key):
+        rows, cols = key
+        height = int(rows.stop) - int(rows.start)
+        width = int(cols.stop) - int(cols.start)
+        return type("FakeRoi", (), {"shape": (height, width, 3)})()
+
+
 def test_exact_captcha_roi_only_accepts_1280x720():
     d = detector_module()
-    frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+    frame = FakeFrame()
     roi = d.crop_captcha_roi(frame, (1280, 720))
     assert roi.shape[:2] == (350, 650)
     with pytest.raises(ValueError):
-        d.crop_captcha_roi(np.zeros((900, 1600, 3), dtype=np.uint8), (1600, 900))
+        d.crop_captcha_roi(frame, (1600, 900))
 
 
 def test_fallback_can_never_claim_spotify_exact():
