@@ -1,0 +1,182 @@
+name: Publish Nghia Client v9.4.2 Launcher Fix
+
+on:
+  push:
+    branches: [build-v9.4.1]
+    paths: ["publish-v9.4.2-trigger.txt"]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  BUILD_RUN_ID: "34634120184"
+  VERIFY_RUN_ID: "34634816205"
+  VERSION: "9.4.2"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: build-v9.4.1
+          fetch-depth: 0
+
+      - name: Require green Windows build and real default-launch verification
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view "$BUILD_RUN_ID" --repo "$REPO" --json status,conclusion --jq 'if .status != "completed" or .conclusion != "success" then error("launcher build not green") else . end'
+          gh run view "$VERIFY_RUN_ID" --repo "$REPO" --json status,conclusion --jq 'if .status != "completed" or .conclusion != "success" then error("real default-launch verification not green") else . end'
+
+      - name: Download fixed launcher and v9.4.1 production inputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p hotfix base
+          gh run download "$BUILD_RUN_ID" --repo "$REPO" -n Nghia-V9.4.1-Fixed-Launcher -D hotfix
+          gh release download v9.4.1 --repo "$REPO" -p NghiaClient_V9.4.1_Portable.zip -p NghiaEdition_Update_v9.4.1.zip -D base
+          test -f hotfix/NghiaLauncher.exe
+          test -f base/NghiaClient_V9.4.1_Portable.zip
+          test -f base/NghiaEdition_Update_v9.4.1.zip
+
+      - name: Assemble and validate v9.4.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf portable update out verify
+          mkdir -p portable update out verify
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json,shutil,zipfile
+
+          def safe_extract(src,dst):
+              dst=Path(dst).resolve()
+              with zipfile.ZipFile(src) as z:
+                  for i in z.infolist():
+                      t=(dst/i.filename).resolve()
+                      if t!=dst and dst not in t.parents: raise SystemExit('unsafe zip entry '+i.filename)
+                  z.extractall(dst)
+
+          safe_extract('base/NghiaClient_V9.4.1_Portable.zip','portable')
+          safe_extract('base/NghiaEdition_Update_v9.4.1.zip','update')
+          shutil.copy2('hotfix/NghiaLauncher.exe','portable/NghiaLauncher.exe')
+
+          cfgp=Path('portable/launcher_config.json')
+          cfg=json.loads(cfgp.read_text(encoding='utf-8'))
+          cfg['launcher_version']='1.0.1'
+          cfgp.write_text(json.dumps(cfg,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          Path('portable/version.json').write_text(json.dumps({'version':'9.4.2'},indent=2)+'\n',encoding='utf-8')
+          crash=Path('portable/user_data/launcher_crash.log')
+          if crash.exists(): crash.unlink()
+
+          rp=Path('update/release.json')
+          r=json.loads(rp.read_text(encoding='utf-8'))
+          r['version']='9.4.2'
+          rp.write_text(json.dumps(r,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+
+          def zip_tree(root,out):
+              root=Path(root)
+              with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+                  for p in sorted(root.rglob('*')):
+                      if p.is_file(): z.write(p,p.relative_to(root).as_posix())
+          zip_tree('portable','out/NghiaClient_V9.4.2_Portable.zip')
+          zip_tree('update','out/NghiaEdition_Update_v9.4.2.zip')
+
+          portable=Path('out/NghiaClient_V9.4.2_Portable.zip')
+          update=Path('out/NghiaEdition_Update_v9.4.2.zip')
+          assert portable.stat().st_size>1_000_000 and update.stat().st_size>1_000_000
+          with zipfile.ZipFile(portable) as z:
+              names=set(z.namelist())
+              for n in ('NghiaLauncher.exe','launcher_config.json','version.json','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py'):
+                  assert n in names,n
+              assert z.read('NghiaLauncher.exe')[:2]==b'MZ'
+              assert json.loads(z.read('version.json'))['version']=='9.4.2'
+              assert json.loads(z.read('launcher_config.json'))['launcher_version']=='1.0.1'
+          with zipfile.ZipFile(update) as z:
+              assert json.loads(z.read('release.json'))['version']=='9.4.2'
+              for n in ('app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py','app_payload/spotify_recovered_core.py'):
+                  assert n in set(z.namelist()),n
+
+          uhash=hashlib.sha256(update.read_bytes()).hexdigest()
+          phash=hashlib.sha256(portable.read_bytes()).hexdigest()
+          m={
+            'version':'9.4.2','channel':'stable',
+            'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.2/NghiaEdition_Update_v9.4.2.zip',
+            'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.2/NghiaEdition_Update_v9.4.2.zip',
+            'sha256':uhash,'payload_dir':'app_payload','min_launcher_version':'1.0.1',
+            'notes':'Launcher default-start verified on real Windows client; crash log/error dialog added. C2 Fast Worker, MiuMiu and PC Alarm unchanged.'
+          }
+          Path('out/latest.json').write_text(json.dumps(m,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print('UPDATE_SHA256='+uhash)
+          print('PORTABLE_SHA256='+phash)
+          PY
+
+      - name: Create public v9.4.2 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v9.4.2 --repo "$REPO" >/dev/null 2>&1; then echo 'v9.4.2 exists'; exit 1; fi
+          gh release create v9.4.2 \
+            out/NghiaClient_V9.4.2_Portable.zip \
+            out/NghiaEdition_Update_v9.4.2.zip \
+            --repo "$REPO" --target main \
+            --title 'Nghia Client v9.4.2 - Launcher Fix' \
+            --notes 'Verified fix for the silent NghiaLauncher startup problem. The launcher is tested through the real default double-click path against the production client. It now also writes user_data/launcher_crash.log and shows an error dialog if bootstrap startup fails. C2 Fast Worker, MiuMiu and PC Alarm are unchanged. Users still on broken v9.4.0 should download this Portable ZIP once; future updates can use CẬP NHẬT normally.'
+
+      - name: Verify public asset hashes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download v9.4.2 --repo "$REPO" -p NghiaClient_V9.4.2_Portable.zip -p NghiaEdition_Update_v9.4.2.zip -D verify
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          m=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          assert hashlib.sha256(Path('verify/NghiaEdition_Update_v9.4.2.zip').read_bytes()).hexdigest()==m['sha256']
+          assert hashlib.sha256(Path('verify/NghiaClient_V9.4.2_Portable.zip').read_bytes()).hexdigest()==hashlib.sha256(Path('out/NghiaClient_V9.4.2_Portable.zip').read_bytes()).hexdigest()
+          print('PUBLIC_V942_ASSETS_OK')
+          PY
+
+      - name: Publish latest.json to main LAST
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp out/latest.json /tmp/latest.json
+          git fetch origin main
+          git switch main
+          cp /tmp/latest.json latest.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add latest.json
+          git commit -m 'release: publish v9.4.2 launcher fix manifest'
+          git push origin main
+
+      - name: Verify production state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v9.4.2 --repo "$REPO" --json isDraft,isPrerelease,tagName,url --jq 'if .isDraft or .isPrerelease or .tagName != "v9.4.2" then error("not stable") else . end'
+          gh api "repos/$REPO/contents/latest.json?ref=main" --jq .content | tr -d '\n' | base64 -d >/tmp/published.json
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          a=json.loads(Path('/tmp/published.json').read_text(encoding='utf-8'))
+          b=json.loads(Path('/tmp/latest.json').read_text(encoding='utf-8'))
+          assert a==b and a['version']=='9.4.2' and a['min_launcher_version']=='1.0.1'
+          print('PRODUCTION_V942_OK')
+          PY
