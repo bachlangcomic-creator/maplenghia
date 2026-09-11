@@ -1,0 +1,96 @@
+diff --git a/maple_nghia_pro.py b/maple_nghia_pro.py
+index 252df50..038eae1 100644
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -453,6 +453,9 @@ class MapleNghiaPro(MapleVisionClient):
+         # Nghĩa extension: C2 may learn its minimap lane Y from stable runtime samples.
+         # ON by default for stability; turn OFF for fixed-Y Spotify parity.
+         self.c2_adaptive_y_enabled = tk.BooleanVar(value=True)
++        # Nghĩa extension: B3 Adaptive Y is opt-in. Fixed profile Y is the
++        # Spotify-parity path because no B3 runtime evidence proves adaptive Y.
++        self.b3_adaptive_y_enabled = tk.BooleanVar(value=False)
+ 
+         self.auto_loot = tk.BooleanVar(value=False)
+         # V9.3 UI toggle: this controls SpotifyRecoveredCore loot scheduling.
+@@ -1277,7 +1280,10 @@ class MapleNghiaPro(MapleVisionClient):
+             self._log("[V9.3 Spotify Core] SIMPLE parity: Spotify độc quyền LEFT/RIGHT + attack cadence + edge jump/flash.")
+             current_simple_map = str(cfg.get("current_map", "")).strip().upper()
+             if current_simple_map == "B3":
+-                self._log("[B3 Adaptive Y] Sẽ tự lấy Y đầu tiên của nhân vật làm tầng farm hiện tại.")
++                if cfg.get("b3_adaptive_y_enabled", False):
++                    self._log("[B3 Adaptive Y] ON (Nghĩa extension): lấy Y đầu tiên làm tầng farm.")
++                else:
++                    self._log("[B3 Fixed Y] Spotify parity: dùng Y cố định từ maps.json.")
+             elif current_simple_map == "C2":
+                 if cfg.get("c2_adaptive_y_enabled", True):
+                     self._log("[C2 Adaptive Y] ON: median 5 mẫu • soft ±6px • hard ±12px • confirm 1.1s; cadence Spotify giữ nguyên.")
+@@ -1315,6 +1321,8 @@ class MapleNghiaPro(MapleVisionClient):
+             parts.append(f"Vùng X: {cfg['LEFT_X']} → {cfg['RIGHT_X']}")
+         if name.strip().upper() == "C2":
+             parts.append("Adaptive Y C2: " + ("ON" if self.c2_adaptive_y_enabled.get() else "OFF"))
++        elif name.strip().upper() == "B3":
++            parts.append("Adaptive Y B3 (Nghĩa extension): " + ("ON" if self.b3_adaptive_y_enabled.get() else "OFF • Fixed Y Spotify"))
+         if "SAFE_PLACE_X" in cfg:
+             parts.append(f"Safe: ({cfg.get('SAFE_PLACE_X')}, {cfg.get('SAFE_PLACE_Y')})")
+         if thresh is not None:
+@@ -1989,6 +1997,7 @@ class MapleNghiaPro(MapleVisionClient):
+             "spotify_force_focus_parity": bool(self.spotify_force_focus_parity.get()),
+             FOCUS_PARITY_MIGRATION_KEY: True,
+             "c2_adaptive_y_enabled": bool(self.c2_adaptive_y_enabled.get()),
++            "b3_adaptive_y_enabled": bool(self.b3_adaptive_y_enabled.get()),
+             "input_backend": self.input_backend.get().strip(),
+             # Spotify main_farm_worker names/semantics. loot_time is seconds.
+             "auto_loot": bool(self.auto_loot.get()),
+@@ -2051,6 +2060,7 @@ class MapleNghiaPro(MapleVisionClient):
+             "spotify_force_focus_parity": self.spotify_force_focus_parity.get(),
+             FOCUS_PARITY_MIGRATION_KEY: True,
+             "c2_adaptive_y_enabled": self.c2_adaptive_y_enabled.get(),
++            "b3_adaptive_y_enabled": self.b3_adaptive_y_enabled.get(),
+             "input_backend": self.input_backend.get(),
+             "auto_loot": self.auto_loot.get(),
+             "spotify_loot_enabled": self.auto_loot.get(),
+@@ -2112,7 +2122,7 @@ class MapleNghiaPro(MapleVisionClient):
+                 ]
+                 bool_vars = [
+                     "focus_before_input", "pause_on_focus_loss", "spotify_runtime_parity_mode", "spotify_force_focus_parity",
+-                    "c2_adaptive_y_enabled", "auto_loot", "auto_pet", "buff1_enabled", "buff2_enabled",
++                    "c2_adaptive_y_enabled", "b3_adaptive_y_enabled", "auto_loot", "auto_pet", "buff1_enabled", "buff2_enabled",
+                     "auto_sell_timer_enabled", "spotify_miumiu_sell_enabled", "spotify_sell_etc",
+                     "pc_alarm", "telegram_enabled", "alert_dead", "alert_dc",
+                     "alert_captcha", "pause_on_alert",
+@@ -2513,8 +2523,13 @@ class MapleNghiaPro(MapleVisionClient):
+         try:
+             if mss is not None:
+                 local_mss = mss.mss()
+-            hwnd, _ = self._find_game_window(initial_cfg.get("window_title", ""))
+-            last_hwnd_refresh = time.monotonic()
++            # Focus Parity A owns exact-title HWND resolution. Prime it once before
++            # the fast loop, then consume only the cached HWND in the C2 hot path.
++            try:
++                self._spotify_focus_refresh(initial_cfg, force=False)
++            except Exception:
++                pass
++            hwnd = self._spotify_cached_game_hwnd()
+             while self.running and generation == self.c2_fast_worker_generation:
+                 cfg = dict(self.runtime_cfg or initial_cfg)
+                 if str(cfg.get("current_map", "")).strip().upper() != "C2":
+@@ -2524,10 +2539,15 @@ class MapleNghiaPro(MapleVisionClient):
+                     time.sleep(0.01)
+                     continue
+ 
+-                now = time.monotonic()
+-                if not hwnd or now - last_hwnd_refresh >= 2.0:
+-                    hwnd, _ = self._find_game_window(cfg.get("window_title", ""))
+-                    last_hwnd_refresh = now
++                cached_hwnd = self._spotify_cached_game_hwnd()
++                if cached_hwnd:
++                    hwnd = cached_hwnd
++                if not hwnd:
++                    # No window handle means capture cannot proceed safely. The
++                    # dedicated focus worker may repopulate the cache next tick.
++                    self.behavior_engine.release_inputs()
++                    time.sleep(0.01)
++                    continue
+                 try:
+                     roi = self._capture_c2_minimap_direct(cfg, local_mss, hwnd)
+                     raw_pos = self._detect_spotify_player_from_minimap(roi, cfg)
