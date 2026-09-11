@@ -1,0 +1,49 @@
+--- a/spotify_behavior_engine.py
++++ b/spotify_behavior_engine.py
+@@ -112,6 +112,14 @@
+         if bool(cfg.get("spotify_force_focus_parity", False)):
+             generation = self.generation
+             snapshot = dict(cfg)
++            # Prime the cache synchronously so the first C2 tick does not perform
++            # any window lookup and does not wait for the first 0.2s worker wakeup.
++            refresher = getattr(self.host, "_spotify_focus_refresh", None)
++            if callable(refresher):
++                try:
++                    refresher(snapshot, force=True)
++                except Exception:
++                    pass
+             self.focus_enforcer_thread = threading.Thread(
+                 target=self._spotify_focus_enforcer_worker, args=(snapshot, generation), daemon=True)
+             self.focus_enforcer_thread.start()
+@@ -124,20 +132,22 @@
+         self.host.spotify_scheduler_last_action = ""
+ 
+     def _spotify_focus_enforcer_worker(self, cfg: dict, generation: int) -> None:
+-        """Recovered Spotify-style dedicated focus loop (~0.2 s cadence).
++        """Spotify-style dedicated focus loop (~0.2 s cadence).
+ 
+-        This is opt-in because, unlike Nghia's passive focus fail-safe, it actively
+-        restores Maple to foreground. It sends no game keys and does not own combat.
++        All exact-title FindWindowW / foreground work lives behind the host refresh
++        bridge. C2 and BehaviorEngine hot paths only consume the cached state.
+         """
++        refresher = getattr(self.host, "_spotify_focus_refresh", None)
+         while self.running and generation == self.generation:
++            focused = False
+             try:
+-                hwnd, _ = self.host._find_game_window(cfg.get("window_title", ""))
+-                if hwnd:
+-                    actual = self.host._game_has_focus(cfg)
+-                    if not actual:
+-                        self.host._focus_hwnd(hwnd)
++                if callable(refresher):
++                    focused = bool(refresher(cfg, force=True))
+             except Exception:
+-                pass
++                focused = False
++            if not focused:
++                # Reacquire failed: fail safe before the next worker iteration.
++                self.release_inputs()
+             time.sleep(self.SPOTIFY_FOCUS_ENFORCER_INTERVAL)
+ 
+     def release_inputs(self) -> None:
