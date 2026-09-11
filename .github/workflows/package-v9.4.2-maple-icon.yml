@@ -33,7 +33,7 @@ jobs:
           if ($state.status -ne "completed" -or $state.conclusion -ne "success") { throw "Icon launcher build is not green" }
           New-Item -ItemType Directory -Force icon-build | Out-Null
           gh run download $env:ICON_BUILD_RUN --repo $env:REPO -n NghiaLauncher-v9.4.2-MapleIcon -D icon-build
-          if (!(Test-Path "icon-build/NghiaLauncher.exe")) { throw "Verified icon launcher artifact missing" }
+          if (!(Test-Path "icon-build/dist/NghiaLauncher.exe")) { throw "Verified icon launcher artifact missing" }
 
       - name: Download and verify public v9.4.2 portable
         shell: pwsh
@@ -53,7 +53,7 @@ jobs:
           if (Test-Path out) { Remove-Item out -Recurse -Force }
           New-Item -ItemType Directory -Force client,out | Out-Null
           Expand-Archive -LiteralPath base/NghiaClient_V9.4.2_Portable.zip -DestinationPath client -Force
-          Copy-Item icon-build/NghiaLauncher.exe client/NghiaLauncher.exe -Force
+          Copy-Item icon-build/dist/NghiaLauncher.exe client/NghiaLauncher.exe -Force
           @'
           from pathlib import Path
           import hashlib, json, zipfile
@@ -73,7 +73,7 @@ jobs:
           print('PORTABLE_MAPLE_ICON_SHA256='+hashlib.sha256(out.read_bytes()).hexdigest())
           print('PORTABLE_MAPLE_ICON_BYTES='+str(out.stat().st_size))
           '@ | python -
-          Copy-Item icon-build/NghiaLauncher.exe out/NghiaLauncher_MapleIcon.exe
+          Copy-Item icon-build/dist/NghiaLauncher.exe out/NghiaLauncher_MapleIcon.exe
 
       - name: Re-extract final ZIP and smoke launcher
         shell: pwsh
