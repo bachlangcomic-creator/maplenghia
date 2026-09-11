@@ -1,0 +1,83 @@
+name: Verify Nghia v9.4.1 Launcher Hotfix Default Launch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-v9.4.1
+    paths:
+      - ".github/workflows/verify-v9.4.1-hotfix.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+
+      - name: Download already-green fixed launcher artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run view 34634120184 --repo bachlangcomic-creator/maplenghia --json status,conclusion --jq 'if .status != "completed" or .conclusion != "success" then error("Fixed launcher build is not green") else . end'
+          New-Item -ItemType Directory -Force hotfix | Out-Null
+          gh run download 34634120184 --repo bachlangcomic-creator/maplenghia -n Nghia-V9.4.1-Fixed-Launcher -D hotfix
+          if (!(Test-Path "hotfix/NghiaLauncher.exe")) { throw "Fixed launcher artifact missing" }
+
+      - name: Download real production v9.4.0 portable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base | Out-Null
+          gh release download v9.4.0 --repo bachlangcomic-creator/maplenghia -p NghiaClient_V9.4.0_Portable.zip -D base
+          Expand-Archive -LiteralPath base/NghiaClient_V9.4.0_Portable.zip -DestinationPath real-client -Force
+          Copy-Item hotfix/NghiaLauncher.exe real-client/NghiaLauncher.exe -Force
+
+      - name: Verify default double-click path starts real app
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "real-client").Path
+          $launcherExe = Join-Path $root "NghiaLauncher.exe"
+          $launcherProc = Start-Process -FilePath $launcherExe -WorkingDirectory $root -PassThru
+          $deadline = (Get-Date).AddSeconds(35)
+          $appProc = $null
+          while ((Get-Date) -lt $deadline) {
+            $apps = @(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) {
+              $appProc = $apps[0]
+              break
+            }
+            if (Test-Path (Join-Path $root "user_data/launcher_crash.log")) {
+              Get-Content (Join-Path $root "user_data/launcher_crash.log")
+              throw "Launcher wrote launcher_crash.log before app start"
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $appProc) {
+            if (Test-Path (Join-Path $root "user_data/launcher_crash.log")) {
+              Get-Content (Join-Path $root "user_data/launcher_crash.log")
+            }
+            throw "Real NghiaClientApp.exe did not start within 35 seconds"
+          }
+          Write-Host "REAL_DEFAULT_LAUNCH_OK PID=$($appProc.Id)"
+          if (Test-Path (Join-Path $root "user_data/update_status.json")) {
+            Get-Content (Join-Path $root "user_data/update_status.json")
+          }
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$launcherProc.HasExited) { Stop-Process -Id $launcherProc.Id -Force -ErrorAction SilentlyContinue }
+
+      - name: Verify no silent bootstrap crash was recorded
+        shell: pwsh
+        run: |
+          if (Test-Path "real-client/user_data/launcher_crash.log") {
+            Get-Content "real-client/user_data/launcher_crash.log"
+            throw "launcher_crash.log exists after default-launch smoke"
+          }
+          Write-Host "NO_SILENT_BOOTSTRAP_CRASH_OK"
