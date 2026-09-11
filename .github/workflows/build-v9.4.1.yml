@@ -1,0 +1,102 @@
+name: Build Nghia V9.4.1 Launcher Hotfix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-v9.4.1
+    paths:
+      - "ci/launcher_bootstrap.py"
+      - ".github/workflows/build-v9.4.1.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install launcher build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install nuitka ordered-set zstandard "requests>=2.32,<3"
+
+      - name: Build fixed NghiaLauncher.exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          python -m nuitka `
+            --onefile `
+            --standalone `
+            --assume-yes-for-downloads `
+            --windows-console-mode=disable `
+            --include-package=requests `
+            --include-package=urllib `
+            --include-module=argparse `
+            --include-module=dataclasses `
+            --include-module=datetime `
+            --include-module=hashlib `
+            --include-module=hmac `
+            --include-module=json `
+            --include-module=secrets `
+            --include-module=shutil `
+            --include-module=stat `
+            --include-module=subprocess `
+            --include-module=threading `
+            --include-module=zipfile `
+            --output-filename=NghiaLauncher.exe `
+            --output-dir=dist `
+            --remove-output `
+            ci/launcher_bootstrap.py
+          if (!(Test-Path "dist/NghiaLauncher.exe")) { throw "NghiaLauncher.exe was not produced" }
+
+      - name: Inspect fixed EXE
+        shell: pwsh
+        run: |
+          $launcher = [IO.File]::ReadAllBytes("dist/NghiaLauncher.exe")
+          if ($launcher[0] -ne 0x4D -or $launcher[1] -ne 0x5A) { throw "Launcher EXE missing MZ header" }
+          if ($launcher.Length -lt 1048576) { throw "Launcher EXE is unexpectedly small" }
+          Get-Item dist/NghiaLauncher.exe | Format-Table Name,Length
+
+      - name: Download published v9.4.0 client used for real-package smoke
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 34631028546 --repo bachlangcomic-creator/maplenghia -n Nghia-v9.4.0-Publication-Evidence -D base
+          if (!(Test-Path "base/NghiaClient_V9.4.0_Portable.zip")) { throw "Published v9.4.0 portable evidence is missing" }
+          Expand-Archive -LiteralPath "base/NghiaClient_V9.4.0_Portable.zip" -DestinationPath "real-client" -Force
+          Copy-Item "dist/NghiaLauncher.exe" "real-client/NghiaLauncher.exe" -Force
+
+      - name: Smoke fixed launcher against real launcher package
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "real-client").Path
+          $proc = Start-Process -FilePath (Join-Path $root "NghiaLauncher.exe") -ArgumentList @("--check-only", "--root", $root) -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Fixed launcher exited with code $($proc.ExitCode)" }
+          $statusPath = Join-Path $root "user_data/update_status.json"
+          if (!(Test-Path $statusPath)) { throw "Fixed launcher did not execute the real launcher package" }
+          $status = Get-Content -Raw -LiteralPath $statusPath | ConvertFrom-Json
+          $allowed = @("up_to_date", "update_available", "offline_or_error", "launcher_update_required")
+          if ($allowed -notcontains $status.state) { throw "Unexpected launcher status: $($status.state)" }
+          if ($status.local_version -ne "9.4.0") { throw "Wrong root/version resolution: $($status.local_version)" }
+          Write-Host "REAL_PACKAGE_SMOKE_OK state=$($status.state) local=$($status.local_version)"
+
+      - name: Upload fixed launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V9.4.1-Fixed-Launcher
+          path: dist/NghiaLauncher.exe
+          if-no-files-found: error
+          retention-days: 7
