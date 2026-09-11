@@ -1,0 +1,311 @@
+name: Publish Nghia Client v9.5.0 Focus Parity A
+
+on:
+  push:
+    branches: [release-v9.5.0-focus-parity]
+    paths: [".github/workflows/publish-v9.5.0.yml"]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: "9.5.0"
+  ICON_RUN_ID: "34638850808"
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-v9.5.0-focus-parity
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download v9.4.2 production base and verified Maple icon launcher
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base, icon | Out-Null
+          gh release download v9.4.2 --repo $env:REPO -p NghiaClient_V9.4.2_Portable.zip -D base
+          $run = gh run view $env:ICON_RUN_ID --repo $env:REPO --json status,conclusion | ConvertFrom-Json
+          if ($run.status -ne 'completed' -or $run.conclusion -ne 'success') { throw 'Maple icon launcher build is not green' }
+          gh run download $env:ICON_RUN_ID --repo $env:REPO -n NghiaLauncher-v9.4.2-MapleIcon -D icon
+          if (!(Test-Path 'base/NghiaClient_V9.4.2_Portable.zip')) { throw 'v9.4.2 portable base missing' }
+          if (!(Test-Path 'icon/NghiaLauncher.exe')) { throw 'verified Maple icon launcher missing' }
+
+      - name: Reconstruct v9.5.0 Focus Parity A candidate
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib, json, shutil, zipfile
+
+          def sha(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          def safe_extract(src, dst):
+              dst = Path(dst).resolve()
+              with zipfile.ZipFile(src) as z:
+                  for info in z.infolist():
+                      target = (dst / info.filename).resolve()
+                      if target != dst and dst not in target.parents:
+                          raise SystemExit('unsafe zip entry: ' + info.filename)
+                  z.extractall(dst)
+
+          shutil.rmtree('portable', ignore_errors=True)
+          shutil.rmtree('update_stage', ignore_errors=True)
+          shutil.rmtree('out', ignore_errors=True)
+          shutil.rmtree('verify', ignore_errors=True)
+          Path('portable').mkdir()
+          Path('out').mkdir()
+          Path('verify').mkdir()
+          safe_extract('base/NghiaClient_V9.4.2_Portable.zip', 'portable')
+
+          expected_base = {
+              'portable/app_payload/maple_nghia_pro.py': 'd6803a4af55cbe6162cf7d0b3fefac9e4611a94fef3dec3362cfe1630fae37dd',
+              'portable/app_payload/spotify_behavior_engine.py': '9297bd15dd8e650efdf2548daf2a29206d8a2dc97137ff0aa8ae019aaff2f0db',
+              'portable/app_payload/spotify_recovered_core.py': 'e5d4e0f8344e3a47d43a13164d6221303583a5af22454990fd9b99f52e52031f',
+              'portable/app_payload/spotify_timing_catalog.py': 'b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066',
+              'portable/app_payload/spotify_miumiu_sell.py': '2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6',
+              'portable/app_payload/spotify_pc_alarm.py': 'a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4',
+              'portable/app_payload/NghiaClientApp.exe': '0c0aef9eb6ba8eb3562c73742ee85348ae924b4eabfad1e8f07d13a882986617',
+          }
+          for p, want in expected_base.items():
+              got = sha(p)
+              if got != want:
+                  raise SystemExit(f'base hash mismatch {p}: {got} != {want}')
+
+          icon_sha = sha('icon/NghiaLauncher.exe')
+          if icon_sha != '67d8105b048c647fdc684bcbec8118a86aff61a0f3f00f261d3b4e36ff76c37b':
+              raise SystemExit('Maple icon launcher hash mismatch: ' + icon_sha)
+          shutil.copy2('icon/NghiaLauncher.exe', 'portable/NghiaLauncher.exe')
+          '@ | python -
+
+          git apply --check --directory=portable/app_payload release_payload/v9.5.0/maple_nghia_pro.patch
+          git apply --directory=portable/app_payload release_payload/v9.5.0/maple_nghia_pro.patch
+          git apply --check --directory=portable/app_payload release_payload/v9.5.0/spotify_behavior_engine.patch
+          git apply --directory=portable/app_payload release_payload/v9.5.0/spotify_behavior_engine.patch
+          Copy-Item release_payload/v9.5.0/spotify_focus_parity.py portable/app_payload/spotify_focus_parity.py -Force
+
+          @'
+          from pathlib import Path
+          import hashlib, json
+
+          def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          expected = {
+              'portable/app_payload/maple_nghia_pro.py': '8742dc65aefbb22875637e43913a800d99ebfe24a519e63a8fdda350ed096c94',
+              'portable/app_payload/spotify_behavior_engine.py': '8f5c4728e2f7072e8fc0cbfa87edba7ba0a276f800b1da4bcd73a1fec2949b4b',
+              'portable/app_payload/spotify_focus_parity.py': '987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1',
+          }
+          for p,want in expected.items():
+              got=sha(p)
+              if got != want: raise SystemExit(f'v9.5 overlay hash mismatch {p}: {got} != {want}')
+
+          for p in expected:
+              if p.endswith('.py'):
+                  compile(Path(p).read_text(encoding='utf-8'), p, 'exec')
+
+          ns={}
+          src=Path('portable/app_payload/spotify_focus_parity.py').read_text(encoding='utf-8')
+          exec(compile(src,'spotify_focus_parity.py','exec'),ns)
+          calls=[]
+          fg={'v':999}
+          def find_exact(title): calls.append(('find',title)); return 111
+          def get_fg(): return fg['v']
+          def force(hwnd): calls.append(('force',hwnd)); fg['v']=hwnd; return True
+          c=ns['SpotifyFocusCache'](find_exact,get_fg,force)
+          assert c.refresh('MapleStory Worlds',ns['SPOTIFY_WINDOW_TITLE_EXACT'],force=True)
+          before=len(calls)
+          assert c.cached_has_focus() and c.cached_hwnd()==111
+          assert len(calls)==before, 'cached hot-path read unexpectedly touched lookup/force'
+          assert ns['focus_parity_enabled_from_config']({'spotify_force_focus_parity':False}) is True
+          assert ns['focus_parity_enabled_from_config']({ns['FOCUS_PARITY_MIGRATION_KEY']:True,'spotify_force_focus_parity':False}) is False
+
+          cfgp=Path('portable/launcher_config.json')
+          cfg=json.loads(cfgp.read_text(encoding='utf-8'))
+          assert cfg.get('launcher_version')=='1.0.1'
+          Path('portable/version.json').write_text(json.dumps({'version':'9.5.0'},indent=2)+'\n',encoding='utf-8')
+          crash=Path('portable/user_data/launcher_crash.log')
+          if crash.exists(): crash.unlink()
+          print('V950_OVERLAY_AND_FOCUS_UNIT_OK')
+          '@ | python -
+
+      - name: Real default-launch smoke on v9.5.0 candidate
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path 'portable').Path
+          $launcher = Join-Path $root 'NghiaLauncher.exe'
+          $lp = Start-Process -FilePath $launcher -WorkingDirectory $root -PassThru
+          $deadline = (Get-Date).AddSeconds(35)
+          $app = $null
+          while ((Get-Date) -lt $deadline) {
+            $apps = @(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app = $apps[0]; break }
+            if (Test-Path (Join-Path $root 'user_data/launcher_crash.log')) {
+              Get-Content (Join-Path $root 'user_data/launcher_crash.log')
+              throw 'launcher crash log created before app startup'
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3
+          $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V950_REAL_DEFAULT_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path (Join-Path $root 'user_data/launcher_crash.log')) {
+            Get-Content (Join-Path $root 'user_data/launcher_crash.log')
+            throw 'launcher_crash.log exists after smoke'
+          }
+
+      - name: Package v9.5.0 and generate manifest
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib, json, shutil, zipfile
+
+          for d in Path('portable/app_payload').rglob('__pycache__'):
+              shutil.rmtree(d, ignore_errors=True)
+
+          status={
+            'latest_version':'9.5.0',
+            'local_version':'9.5.0',
+            'notes':'Spotify Focus Parity A: FindWindowW cache + 0.2s focus worker; C2 timing unchanged',
+            'state':'up_to_date',
+          }
+          Path('portable/user_data/update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+
+          shutil.rmtree('update_stage', ignore_errors=True)
+          Path('update_stage').mkdir()
+          shutil.copytree('portable/app_payload','update_stage/app_payload')
+          release={
+            'payload_dir':'app_payload',
+            'required_files':['NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py','spotify_recovered_core.py','spotify_behavior_engine.py','spotify_focus_parity.py','spotify_miumiu_sell.py','spotify_pc_alarm.py'],
+            'version':'9.5.0',
+          }
+          Path('update_stage/release.json').write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+
+          def zip_tree(root,out):
+              root=Path(root)
+              with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+                  for p in sorted(root.rglob('*')):
+                      if p.is_file(): z.write(p,p.relative_to(root).as_posix())
+
+          Path('out').mkdir(exist_ok=True)
+          zip_tree('portable','out/NghiaClient_V9.5.0_Portable.zip')
+          zip_tree('update_stage','out/NghiaEdition_Update_v9.5.0.zip')
+
+          def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          psha=sha('out/NghiaClient_V9.5.0_Portable.zip')
+          usha=sha('out/NghiaEdition_Update_v9.5.0.zip')
+          for p in ('out/NghiaClient_V9.5.0_Portable.zip','out/NghiaEdition_Update_v9.5.0.zip'):
+              if Path(p).stat().st_size < 1_000_000: raise SystemExit('unexpectedly small package: '+p)
+
+          with zipfile.ZipFile('out/NghiaClient_V9.5.0_Portable.zip') as z:
+              names=set(z.namelist())
+              for n in ('NghiaLauncher.exe','version.json','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe','app_payload/spotify_focus_parity.py'):
+                  assert n in names,n
+              assert z.read('NghiaLauncher.exe')[:2]==b'MZ'
+              assert json.loads(z.read('version.json'))['version']=='9.5.0'
+          with zipfile.ZipFile('out/NghiaEdition_Update_v9.5.0.zip') as z:
+              names=set(z.namelist())
+              assert json.loads(z.read('release.json'))['version']=='9.5.0'
+              for n in ('app_payload/NghiaClientApp.exe','app_payload/spotify_focus_parity.py','app_payload/spotify_recovered_core.py'):
+                  assert n in names,n
+
+          manifest={
+            'version':'9.5.0','channel':'stable',
+            'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.5.0/NghiaEdition_Update_v9.5.0.zip',
+            'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.5.0/NghiaEdition_Update_v9.5.0.zip',
+            'sha256':usha,'payload_dir':'app_payload','min_launcher_version':'1.0.1',
+            'notes':'Spotify Focus Parity A: dedicated 0.2s FindWindowW focus worker with cached HWND/foreground state; C2 timing, MiuMiu and PC Alarm unchanged.'
+          }
+          Path('out/latest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print('PORTABLE_SHA256='+psha)
+          print('UPDATE_SHA256='+usha)
+          '@ | python -
+
+      - name: Create public v9.5.0 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v9.5.0 --repo $env:REPO *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v9.5.0 release already exists' }
+          gh release create v9.5.0 `
+            out/NghiaClient_V9.5.0_Portable.zip `
+            out/NghiaEdition_Update_v9.5.0.zip `
+            --repo $env:REPO `
+            --target release-v9.5.0-focus-parity `
+            --title 'Nghia Client v9.5.0 - Spotify Focus Parity A' `
+            --notes 'Adds Spotify Focus Parity A: a dedicated ~0.2s FindWindowW focus worker caches HWND/foreground state and actively restores Maple focus. C2 hot paths consume only cached focus state, avoiding repeated EnumWindows/window lookup work. C2 TP/Skill timing, MiuMiu, PC Alarm, launcher updater, and the verified Maple launcher icon remain unchanged.'
+          if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
+
+      - name: Verify public release assets before publishing latest.json
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force verify | Out-Null
+          gh release download v9.5.0 --repo $env:REPO -p NghiaClient_V9.5.0_Portable.zip -p NghiaEdition_Update_v9.5.0.zip -D verify
+          if ($LASTEXITCODE -ne 0) { throw 'public asset download failed' }
+          @'
+          from pathlib import Path
+          import hashlib,json
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          m=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          assert sha('verify/NghiaEdition_Update_v9.5.0.zip')==m['sha256']
+          assert sha('verify/NghiaClient_V9.5.0_Portable.zip')==sha('out/NghiaClient_V9.5.0_Portable.zip')
+          print('PUBLIC_V950_ASSET_HASHES_OK')
+          '@ | python -
+          $rel = gh release view v9.5.0 --repo $env:REPO --json isDraft,isPrerelease,tagName,url | ConvertFrom-Json
+          if ($rel.isDraft -or $rel.isPrerelease -or $rel.tagName -ne 'v9.5.0') { throw 'release is not public stable v9.5.0' }
+          Write-Host "PUBLIC_RELEASE_OK $($rel.url)"
+
+      - name: Publish latest.json to main LAST
+        shell: pwsh
+        run: |
+          Copy-Item out/latest.json $env:RUNNER_TEMP/latest-v9.5.0.json -Force
+          git fetch origin main
+          git switch main
+          Copy-Item $env:RUNNER_TEMP/latest-v9.5.0.json latest.json -Force
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add latest.json
+          git commit -m 'release: publish v9.5.0 Focus Parity A manifest'
+          if ($LASTEXITCODE -ne 0) { throw 'latest.json commit failed' }
+          git push origin main
+          if ($LASTEXITCODE -ne 0) { throw 'latest.json push failed' }
+
+      - name: Verify production latest.json and release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $obj = gh api "repos/$env:REPO/contents/latest.json?ref=main" | ConvertFrom-Json
+          $bytes = [Convert]::FromBase64String(($obj.content -replace "`n",''))
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP/published-latest.json", $bytes)
+          @'
+          from pathlib import Path
+          import json, os
+          a=json.loads(Path('out/latest.json').read_text(encoding='utf-8'))
+          b=json.loads(Path(os.environ['RUNNER_TEMP'],'published-latest.json').read_text(encoding='utf-8'))
+          assert a==b
+          assert b['version']=='9.5.0'
+          assert b['min_launcher_version']=='1.0.1'
+          assert b['package_url'].endswith('/v9.5.0/NghiaEdition_Update_v9.5.0.zip')
+          print('PRODUCTION_V950_OK')
+          '@ | python -
