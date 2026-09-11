@@ -1,0 +1,14 @@
+diff --git a/spotify_behavior_engine.py b/spotify_behavior_engine.py
+index 1f25294..76c5fa5 100644
+--- a/spotify_behavior_engine.py
++++ b/spotify_behavior_engine.py
+@@ -151,6 +151,9 @@ class SpotifyBehaviorEngine:
+             time.sleep(self.SPOTIFY_FOCUS_ENFORCER_INTERVAL)
+ 
+     def release_inputs(self) -> None:
++        # Teleport/flash actions are synchronous taps inside this same input_lock.
++        # STOP therefore cannot interleave mid-hold: it waits for the tap's finally
++        # release, then this fail-safe releases persistent movement/skill ownership.
+         with self.input_lock:
+             try:
+                 self.core._spotify_primary_skill_release()
