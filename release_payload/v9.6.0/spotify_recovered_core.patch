@@ -65,7 +65,7 @@ index d956136..2260c42 100644
              self.spotify_pirate_farm_next_attack = 0.0
              return True
  
-@@ -2517,19 +2532,13 @@ class SpotifyRecoveredCore:
+@@ -2517,18 +2532,12 @@ class SpotifyRecoveredCore:
                           else cfg.get("left_key", "LEFT"))
          self.set_move(direction_key)
  
