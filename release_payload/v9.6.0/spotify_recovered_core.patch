@@ -1,0 +1,89 @@
+diff --git a/spotify_recovered_core.py b/spotify_recovered_core.py
+index d956136..2260c42 100644
+--- a/spotify_recovered_core.py
++++ b/spotify_recovered_core.py
+@@ -1703,20 +1703,24 @@ class SpotifyRecoveredCore:
+         self.last_map_player_seen = now
+         self._spotify_update_stuck(cfg, map_pos, now)
+ 
+-        # Adaptive lane extensions do not alter Spotify combat cadence. B3 keeps the
+-        # existing first-valid-Y lock. C2 optionally uses a stronger median/confidence
+-        # learner so small minimap/UI drift does not trigger false floor recovery.
++        # Adaptive lane extensions do not alter Spotify combat cadence. B3 fixed Y
++        # is the Spotify-parity path; its first-valid-Y lock is an opt-in Nghĩa
++        # extension. C2 keeps its separately configurable median/confidence learner.
+         map_name = str(cfg.get("current_map", "")).strip().upper()
+         c2_anchor_ready = True
+-        if map_name == "B3":
++        if map_name == "B3" and bool(cfg.get("b3_adaptive_y_enabled", False)):
+             if self.spotify_simple_adaptive_y is None:
+                 self.spotify_simple_adaptive_y = float(py)
+-                self._log(f"[V8.4 B3] Đã khóa tầng farm hiện tại tại Y={py:.0f} khi START.")
++                self._log(f"[B3 Adaptive Y] Nghĩa extension: khóa tầng hiện tại Y={py:.0f}.")
+             lane_y = float(self.spotify_simple_adaptive_y)
+             left_y = lane_y
+             right_y = lane_y
+             min_y = lane_y - 11.0
+             max_y = lane_y + 11.0
++        elif map_name == "B3":
++            # Fixed maps.json LEFT_Y/RIGHT_Y values remain untouched. Clear any
++            # stale extension anchor if the hidden config was switched off.
++            self.spotify_simple_adaptive_y = None
+         elif map_name == "C2" and bool(cfg.get("c2_adaptive_y_enabled", True)):
+             profile_y = (left_y + right_y) / 2.0
+             lane_y, c2_anchor_ready = self._spotify_c2_adaptive_y_step(
+@@ -2497,18 +2501,29 @@ class SpotifyRecoveredCore:
+         tol = SPOTIFY_PIRATE_TOLERANCE
+         skill_key = self._spotify_skill_key(cfg)
+ 
+-        # Endpoint reversal itself has no separately proven pause/jump constant.
+-        # The recovered 0.08 -> randint(150,300) -> sleep(0.05) ->
+-        # hold_combo_action(200..500ms) sequence belongs to the FARM tail below.
++        # Recovered normal-Pirate edge branch: release, optional 8% jump/human
++        # action for 150..300ms, reverse, then settle 0.05s before the next leg.
+         if self.map_move_direction > 0 and px >= right_x - tol:
+             self.release_move()
++            jump_key = str(cfg.get("jump_key") or "").strip()
++            if jump_key and random.random() < SPOTIFY_PIRATE_FARM_EDGE_CHANCE:
++                self._spotify_input_semantic(
++                    cfg, "JUMP", jump_key,
++                    hold_ms=random.randint(*SPOTIFY_PIRATE_FARM_EDGE_JUMP_MS))
+             self.map_move_direction = -1
++            time.sleep(SPOTIFY_PIRATE_FARM_TURN_SLEEP)
+             self.spotify_pirate_farm_next_attack = 0.0
+             return True
+ 
+         if self.map_move_direction < 0 and px <= left_x + tol:
+             self.release_move()
++            jump_key = str(cfg.get("jump_key") or "").strip()
++            if jump_key and random.random() < SPOTIFY_PIRATE_FARM_EDGE_CHANCE:
++                self._spotify_input_semantic(
++                    cfg, "JUMP", jump_key,
++                    hold_ms=random.randint(*SPOTIFY_PIRATE_FARM_EDGE_JUMP_MS))
+             self.map_move_direction = 1
++            time.sleep(SPOTIFY_PIRATE_FARM_TURN_SLEEP)
+             self.spotify_pirate_farm_next_attack = 0.0
+             return True
+ 
+@@ -2517,19 +2532,13 @@ class SpotifyRecoveredCore:
+                          else cfg.get("left_key", "LEFT"))
+         self.set_move(direction_key)
+ 
+-        # Exact recovered Pirate2 FARM tail: 0.08 human-action branch with
+-        # randint(150,300), sleep(0.05), then hold_combo_action 200..500ms.
++        # While travelling, Pirate2 holds movement + Skill for the recovered
++        # 200..500ms combo window. No edge-jump branch or extra controller sleep
++        # is injected into this moving-combat action.
+         if skill_key and now >= self.spotify_pirate_farm_next_attack:
+-            jump_key = str(cfg.get("jump_key") or "").strip()
+-            if jump_key and random.random() < SPOTIFY_PIRATE_FARM_EDGE_CHANCE:
+-                self._spotify_input_semantic(
+-                    cfg, "JUMP", jump_key, direction_key=direction_key,
+-                    hold_ms=random.randint(*SPOTIFY_PIRATE_FARM_EDGE_JUMP_MS))
+-            time.sleep(SPOTIFY_PIRATE_FARM_TURN_SLEEP)
+             self._spotify_hold_combo_action(
+                 cfg, direction_key, skill_key,
+                 hold_time=random.randint(*SPOTIFY_PIRATE_FARM_HOLD_MS) / 1000.0)
+-            # No extra post-combo delay exists in the recovered module constants.
+             self.spotify_pirate_farm_next_attack = time.monotonic()
+         return True
