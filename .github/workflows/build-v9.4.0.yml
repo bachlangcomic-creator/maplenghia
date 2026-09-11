@@ -47,6 +47,19 @@ jobs:
             --include-package=numpy `
             --include-package=pydirectinput `
             --include-package=pyautogui `
+            --include-package=urllib `
+            --include-module=ctypes.wintypes `
+            --include-module=winsound `
+            --include-module=queue `
+            --include-module=subprocess `
+            --include-module=threading `
+            --include-module=dataclasses `
+            --include-module=hashlib `
+            --include-module=importlib `
+            --include-module=json `
+            --include-module=random `
+            --include-module=re `
+            --include-module=typing `
             --output-filename=NghiaClientApp.exe `
             --output-dir=dist `
             --remove-output `
@@ -62,6 +75,19 @@ jobs:
             --assume-yes-for-downloads `
             --windows-console-mode=disable `
             --include-package=requests `
+            --include-package=urllib `
+            --include-module=argparse `
+            --include-module=dataclasses `
+            --include-module=datetime `
+            --include-module=hashlib `
+            --include-module=hmac `
+            --include-module=json `
+            --include-module=secrets `
+            --include-module=shutil `
+            --include-module=stat `
+            --include-module=subprocess `
+            --include-module=threading `
+            --include-module=zipfile `
             --output-filename=NghiaLauncher.exe `
             --output-dir=dist `
             --remove-output `
@@ -77,24 +103,64 @@ jobs:
           if ($app[0] -ne 0x4D -or $app[1] -ne 0x5A) { throw "App EXE missing MZ header" }
           if ($launcher[0] -ne 0x4D -or $launcher[1] -ne 0x5A) { throw "Launcher EXE missing MZ header" }
 
-      - name: Smoke execute app bootstrap
+      - name: Smoke execute app bootstrap with runtime dependencies
         shell: pwsh
         run: |
           $dir = Join-Path $PWD "smoke-app"
           New-Item -ItemType Directory -Force $dir | Out-Null
           Copy-Item "dist/NghiaClientApp.exe" (Join-Path $dir "NghiaClientApp.exe")
-          Set-Content -LiteralPath (Join-Path $dir "nghia_spotify_nologin.py") -Encoding UTF8 -Value "from pathlib import Path; Path(__file__).with_name('app.marker').write_text('ok', encoding='utf-8')"
+          @'
+          import ctypes
+          import ctypes.wintypes
+          import json
+          import queue
+          import subprocess
+          import threading
+          import tkinter
+          import urllib.parse
+          import urllib.request
+          import winsound
+          import customtkinter
+          import cv2
+          import mss
+          import numpy
+          import pydirectinput
+          import pyautogui
+          from PIL import Image
+          from pathlib import Path
+          Path(__file__).with_name("app.marker").write_text("ok", encoding="utf-8")
+          '@ | Set-Content -LiteralPath (Join-Path $dir "nghia_spotify_nologin.py") -Encoding UTF8
           & (Join-Path $dir "NghiaClientApp.exe")
+          if ($LASTEXITCODE -ne 0) { throw "App bootstrap exited with code $LASTEXITCODE" }
           if (!(Test-Path (Join-Path $dir "app.marker"))) { throw "App bootstrap did not execute adjacent source" }
 
-      - name: Smoke execute launcher bootstrap
+      - name: Smoke execute launcher bootstrap with runtime dependencies
         shell: pwsh
         run: |
           $dir = Join-Path $PWD "smoke-launcher"
           New-Item -ItemType Directory -Force (Join-Path $dir "launcher") | Out-Null
           Copy-Item "dist/NghiaLauncher.exe" (Join-Path $dir "NghiaLauncher.exe")
-          Set-Content -LiteralPath (Join-Path $dir "launcher/nghia_launcher.py") -Encoding UTF8 -Value "from pathlib import Path; Path(__file__).parent.parent.joinpath('launcher.marker').write_text('ok', encoding='utf-8')"
+          @'
+          import argparse
+          import dataclasses
+          import datetime
+          import hashlib
+          import hmac
+          import json
+          import requests
+          import secrets
+          import shutil
+          import stat
+          import subprocess
+          import threading
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+          Path(__file__).parent.parent.joinpath("launcher.marker").write_text("ok", encoding="utf-8")
+          '@ | Set-Content -LiteralPath (Join-Path $dir "launcher/nghia_launcher.py") -Encoding UTF8
           & (Join-Path $dir "NghiaLauncher.exe")
+          if ($LASTEXITCODE -ne 0) { throw "Launcher bootstrap exited with code $LASTEXITCODE" }
           if (!(Test-Path (Join-Path $dir "launcher.marker"))) { throw "Launcher bootstrap did not execute adjacent source" }
 
       - name: Upload portable executables
