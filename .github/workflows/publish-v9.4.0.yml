@@ -17,7 +17,7 @@ env:
   BUILD_RUN_ID: "34619623349"
   REPO: "bachlangcomic-creator/maplenghia"
   SOURCE_SHA256: "731ae001d15390a018a30a89316ebd961068c7f70f994aa2572416289df17f2a"
-  BACKGROUND_SHA256: "2c4ff2d6592070b8ec5016fc428fdb5aae663ff07980442a534bcca68523ba33"
+  GENERATED_BG_SHA256: "cc7cfb44f59dd58eb96b00b67b15c3870043ab78e93676aa52d6eb650674c93a"
 
 jobs:
   publish:
@@ -80,8 +80,34 @@ jobs:
             | tr -d '\r\n' > /tmp/source_runtime_lean.b64
           base64 -d /tmp/source_runtime_lean.b64 > ci_payload/source_runtime_lean.zip
           echo "$SOURCE_SHA256  ci_payload/source_runtime_lean.zip" | sha256sum -c -
-          echo "$BACKGROUND_SHA256  ci_payload/background.png" | sha256sum -c -
           test "$(stat -c %s ci_payload/source_runtime_lean.zip)" = "142808"
+
+      - name: Generate deterministic UI background
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import struct, zlib
+          w, h = 1200, 628
+          raw = bytearray()
+          for y in range(h):
+              t = y / (h - 1)
+              v = round(28 * (1 - t) + 8 * t)
+              raw.append(0)
+              raw.extend(bytes((v, v, v)) * w)
+          def chunk(kind, data):
+              return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+          png = (
+              b'\x89PNG\r\n\x1a\n'
+              + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+              + chunk(b'IDAT', zlib.compress(bytes(raw), 9))
+              + chunk(b'IEND', b'')
+          )
+          Path('ci_payload/generated_background.png').write_bytes(png)
+          PY
+          echo "$GENERATED_BG_SHA256  ci_payload/generated_background.png" | sha256sum -c -
+          test "$(stat -c %s ci_payload/generated_background.png)" = "3200"
 
       - name: Expand audited source
         shell: bash
@@ -102,7 +128,7 @@ jobs:
                       raise SystemExit(f'Unsafe source archive entry: {info.filename}')
               z.extractall(dst)
           PY
-          cp ci_payload/background.png work/src/app_payload/background.png
+          cp ci_payload/generated_background.png work/src/app_payload/background.png
           python - <<'PY'
           from pathlib import Path
           import json
@@ -175,11 +201,11 @@ jobs:
               assert p.is_file() and p.stat().st_size > 1_000_000, (p, p.stat().st_size)
           with zipfile.ZipFile(update) as z:
               names=set(z.namelist())
-              for required in ('release.json','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py','app_payload/spotify_recovered_core.py'):
+              for required in ('release.json','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py','app_payload/spotify_recovered_core.py','app_payload/background.png'):
                   assert required in names, required
           with zipfile.ZipFile(portable) as z:
               names=set(z.namelist())
-              for required in ('NghiaLauncher.exe','version.json','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py'):
+              for required in ('NghiaLauncher.exe','version.json','launcher/nghia_launcher.py','app_payload/NghiaClientApp.exe','app_payload/nghia_spotify_nologin.py','app_payload/background.png'):
                   assert required in names, required
           print('UPDATE_SHA256='+digest)
           print('PORTABLE_SHA256='+hashlib.sha256(portable.read_bytes()).hexdigest())
@@ -261,6 +287,7 @@ jobs:
           PY
 
       - name: Upload publication evidence
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Nghia-v9.4.0-Publication-Evidence
