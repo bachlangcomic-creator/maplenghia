@@ -1,0 +1,104 @@
+name: Package Nghia v9.4.2 Portable with Maple Icon
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build-v9.4.2-icon
+    paths:
+      - ".github/workflows/package-v9.4.2-maple-icon.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      REPO: bachlangcomic-creator/maplenghia
+      ICON_BUILD_RUN: "34638850808"
+      BASE_PORTABLE_SHA256: "a1c9d34625b65b734f9bb44f8d8175ef88b673ca74f67c629c947bd33b1e3762"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require green icon build and download launcher
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $state = gh run view $env:ICON_BUILD_RUN --repo $env:REPO --json status,conclusion | ConvertFrom-Json
+          if ($state.status -ne "completed" -or $state.conclusion -ne "success") { throw "Icon launcher build is not green" }
+          New-Item -ItemType Directory -Force icon-build | Out-Null
+          gh run download $env:ICON_BUILD_RUN --repo $env:REPO -n NghiaLauncher-v9.4.2-MapleIcon -D icon-build
+          if (!(Test-Path "icon-build/NghiaLauncher.exe")) { throw "Verified icon launcher artifact missing" }
+
+      - name: Download and verify public v9.4.2 portable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base | Out-Null
+          gh release download v9.4.2 --repo $env:REPO -p NghiaClient_V9.4.2_Portable.zip -D base
+          $actual = (Get-FileHash base/NghiaClient_V9.4.2_Portable.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:BASE_PORTABLE_SHA256) { throw "Base portable SHA mismatch: $actual" }
+          Write-Host "BASE_PORTABLE_SHA256_OK=$actual"
+
+      - name: Assemble icon portable
+        shell: pwsh
+        run: |
+          if (Test-Path client) { Remove-Item client -Recurse -Force }
+          if (Test-Path out) { Remove-Item out -Recurse -Force }
+          New-Item -ItemType Directory -Force client,out | Out-Null
+          Expand-Archive -LiteralPath base/NghiaClient_V9.4.2_Portable.zip -DestinationPath client -Force
+          Copy-Item icon-build/NghiaLauncher.exe client/NghiaLauncher.exe -Force
+          @'
+          from pathlib import Path
+          import hashlib, json, zipfile
+
+          root=Path('client')
+          launcher=root/'NghiaLauncher.exe'
+          assert launcher.read_bytes()[:2] == b'MZ'
+          assert launcher.stat().st_size > 1_000_000
+          version=json.loads((root/'version.json').read_text(encoding='utf-8'))
+          assert version['version']=='9.4.2', version
+          out=Path('out/NghiaClient_V9.4.2_Portable_MapleIcon.zip')
+          with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file():
+                      z.write(p,p.relative_to(root).as_posix())
+          print('LAUNCHER_SHA256='+hashlib.sha256(launcher.read_bytes()).hexdigest())
+          print('PORTABLE_MAPLE_ICON_SHA256='+hashlib.sha256(out.read_bytes()).hexdigest())
+          print('PORTABLE_MAPLE_ICON_BYTES='+str(out.stat().st_size))
+          '@ | python -
+          Copy-Item icon-build/NghiaLauncher.exe out/NghiaLauncher_MapleIcon.exe
+
+      - name: Re-extract final ZIP and smoke launcher
+        shell: pwsh
+        run: |
+          if (Test-Path verify-client) { Remove-Item verify-client -Recurse -Force }
+          Expand-Archive -LiteralPath out/NghiaClient_V9.4.2_Portable_MapleIcon.zip -DestinationPath verify-client -Force
+          $root = (Resolve-Path "verify-client").Path
+          $proc = Start-Process -FilePath (Join-Path $root "NghiaLauncher.exe") -WorkingDirectory $root -ArgumentList @("--check-only", "--root", $root) -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Final packaged launcher exited with code $($proc.ExitCode)" }
+          $statusPath = Join-Path $root "user_data/update_status.json"
+          if (!(Test-Path $statusPath)) { throw "Final packaged launcher did not write update status" }
+          $status = Get-Content -Raw -LiteralPath $statusPath | ConvertFrom-Json
+          if ($status.local_version -ne "9.4.2") { throw "Final package version resolution failed: $($status.local_version)" }
+          if (Test-Path (Join-Path $root "user_data/launcher_crash.log")) {
+            Get-Content (Join-Path $root "user_data/launcher_crash.log")
+            throw "Final packaged launcher produced launcher_crash.log"
+          }
+          Write-Host "FINAL_PACKAGE_SMOKE_OK state=$($status.state) local=$($status.local_version)"
+
+      - name: Upload final portable and launcher
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-v9.4.2-MapleIcon-Package
+          path: |
+            out/NghiaClient_V9.4.2_Portable_MapleIcon.zip
+            out/NghiaLauncher_MapleIcon.exe
+          if-no-files-found: error
+          retention-days: 14
