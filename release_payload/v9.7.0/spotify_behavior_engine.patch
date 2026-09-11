@@ -1,0 +1,16 @@
+diff --git a/spotify_behavior_engine.py b/spotify_behavior_engine.py
+index 76c5fa5..9c2baf0 100644
+--- a/spotify_behavior_engine.py
++++ b/spotify_behavior_engine.py
+@@ -498,9 +498,9 @@ class SpotifyBehaviorEngine:
+                 return False
+             return bool(self.core._spotify_primary_skill_step(cfg, now))
+ 
+-    def safe_place_step(self, cfg: dict, map_pos: MapPosition, now: float) -> bool:
++    def safe_place_step(self, cfg: dict, map_pos: MapPosition, now: float):
+         with self.input_lock:
+-            return bool(self.core._spotify_safe_place_step(cfg, map_pos, now))
++            return self.core._spotify_safe_place_step(cfg, map_pos, now)
+ 
+     def pet_step(self, cfg: dict, now: float) -> bool:
+         """Spotify-owned Pet scheduler for Spotify profiles.
