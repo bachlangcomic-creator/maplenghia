@@ -17,6 +17,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # second push intentionally triggers this temporary dispatcher
           gh workflow run publish-v9.7.0.yml \
             --repo bachlangcomic-creator/maplenghia \
             --ref release-v9.7.0-detection-watchdog-parity \
