@@ -77,6 +77,26 @@ jobs:
           if ($app[0] -ne 0x4D -or $app[1] -ne 0x5A) { throw "App EXE missing MZ header" }
           if ($launcher[0] -ne 0x4D -or $launcher[1] -ne 0x5A) { throw "Launcher EXE missing MZ header" }
 
+      - name: Smoke execute app bootstrap
+        shell: pwsh
+        run: |
+          $dir = Join-Path $PWD "smoke-app"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item "dist/NghiaClientApp.exe" (Join-Path $dir "NghiaClientApp.exe")
+          Set-Content -LiteralPath (Join-Path $dir "nghia_spotify_nologin.py") -Encoding UTF8 -Value "from pathlib import Path; Path(__file__).with_name('app.marker').write_text('ok', encoding='utf-8')"
+          & (Join-Path $dir "NghiaClientApp.exe")
+          if (!(Test-Path (Join-Path $dir "app.marker"))) { throw "App bootstrap did not execute adjacent source" }
+
+      - name: Smoke execute launcher bootstrap
+        shell: pwsh
+        run: |
+          $dir = Join-Path $PWD "smoke-launcher"
+          New-Item -ItemType Directory -Force (Join-Path $dir "launcher") | Out-Null
+          Copy-Item "dist/NghiaLauncher.exe" (Join-Path $dir "NghiaLauncher.exe")
+          Set-Content -LiteralPath (Join-Path $dir "launcher/nghia_launcher.py") -Encoding UTF8 -Value "from pathlib import Path; Path(__file__).parent.parent.joinpath('launcher.marker').write_text('ok', encoding='utf-8')"
+          & (Join-Path $dir "NghiaLauncher.exe")
+          if (!(Test-Path (Join-Path $dir "launcher.marker"))) { throw "Launcher bootstrap did not execute adjacent source" }
+
       - name: Upload portable executables
         uses: actions/upload-artifact@v4
         with:
