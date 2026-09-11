@@ -1,10 +1,10 @@
 {
-  "version": "9.4.2",
+  "version": "9.5.0",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.2/NghiaEdition_Update_v9.4.2.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.4.2/NghiaEdition_Update_v9.4.2.zip",
-  "sha256": "72fe7a4daa2382f3eaef27d46913dfa6de424d3addccbc48ba702126d1ebb5c4",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.5.0/NghiaEdition_Update_v9.5.0.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.5.0/NghiaEdition_Update_v9.5.0.zip",
+  "sha256": "22ab93ba1e1c0f45c1dd28ce41210edf1f606a6b3448f103b86fb484ea855cb2",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "Launcher default-start verified on real Windows client; crash log/error dialog added. C2 Fast Worker, MiuMiu and PC Alarm unchanged."
+  "notes": "Spotify Focus Parity A: dedicated 0.2s FindWindowW focus worker with cached HWND/foreground state; C2 timing, MiuMiu and PC Alarm unchanged."
 }
