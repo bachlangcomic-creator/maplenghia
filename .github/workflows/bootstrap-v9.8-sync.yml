@@ -24,10 +24,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat sync/v9.8-bootstrap-part01.txt \
-              sync/v9.8-bootstrap-part02.txt \
-              sync/v9.8-bootstrap-part03.txt \
-              sync/v9.8-bootstrap-part04.txt > /tmp/v9.8-bootstrap.patch
+          : > /tmp/v9.8-bootstrap.patch
+          for part in \
+            sync/v9.8-bootstrap-part01.b64 \
+            sync/v9.8-bootstrap-part02.b64 \
+            sync/v9.8-bootstrap-part03.b64 \
+            sync/v9.8-bootstrap-part04.b64; do
+            base64 -d "$part" >> /tmp/v9.8-bootstrap.patch
+          done
+          sha256sum /tmp/v9.8-bootstrap.patch
           git config user.name 'OpenAI'
           git config user.email 'noreply@openai.com'
           git am --3way /tmp/v9.8-bootstrap.patch
@@ -38,10 +43,10 @@ jobs:
           set -euo pipefail
           git rm -f \
             .github/workflows/bootstrap-v9.8-sync.yml \
-            sync/v9.8-bootstrap-part01.txt \
-            sync/v9.8-bootstrap-part02.txt \
-            sync/v9.8-bootstrap-part03.txt \
-            sync/v9.8-bootstrap-part04.txt \
+            sync/v9.8-bootstrap-part01.b64 \
+            sync/v9.8-bootstrap-part02.b64 \
+            sync/v9.8-bootstrap-part03.b64 \
+            sync/v9.8-bootstrap-part04.b64 \
             sync/v9.8-bootstrap-ready.txt
           git commit -m 'chore: remove v9.8 bootstrap sync'
           git push origin HEAD:release-v9.8.0-exact-detector-watchdog-recovery
