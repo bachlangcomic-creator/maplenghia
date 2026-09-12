@@ -1,5 +1,5 @@
 diff --git a/maple_nghia_pro.py b/maple_nghia_pro.py
-index a902ea2..426d2cf 100644
+index a902ea2..2d221b9 100644
 --- a/maple_nghia_pro.py
 +++ b/maple_nghia_pro.py
 @@ -50,6 +50,7 @@ from spotify_detection_parity import (
@@ -10,7 +10,15 @@ index a902ea2..426d2cf 100644
      score_dead,
      score_disconnect,
      score_full_bag_variant,
-@@ -346,6 +347,7 @@ class MapleNghiaPro(MapleVisionClient):
+@@ -245,6 +246,7 @@ class MapleNghiaPro(MapleVisionClient):
+         self.spotify_all_cure_market = SpotifyAllCureMarketWorker(self)
+         self.spotify_full_bag_event = threading.Event()
+         self.spotify_sell_timer_event = threading.Event()
++        self.spotify_sell_inflight = False
+         self.maps_data = self._read_maps()
+         self.event_log_queue = queue.Queue(maxsize=200)
+         self.ui_alert_queue = queue.Queue(maxsize=20)
+@@ -346,6 +348,7 @@ class MapleNghiaPro(MapleVisionClient):
          self.spotify_sell_arrived_since = 0.0
          self.spotify_full_bag_event.clear()
          self.spotify_sell_timer_event.clear()
@@ -18,15 +26,57 @@ index a902ea2..426d2cf 100644
          self.behavior_engine.core._spotify_reset_safe_place_state()
          self.cached_dead = None
          self.cached_dc = None
-@@ -1266,6 +1268,7 @@ class MapleNghiaPro(MapleVisionClient):
+@@ -1266,6 +1269,8 @@ class MapleNghiaPro(MapleVisionClient):
          self.spotify_pirate_onehit_wait_until = 0.0
          self.spotify_pirate_onehit_attacked = False
          self.spotify_sell_arrived_since = 0.0
++        self.spotify_sell_inflight = False
 +        self.spotify_disconnect_latched = False
          if self._is_spotify_profile(cfg):
              p = cfg.get("map_profile") or {}
              self._log(f"Spotify farm parity: {cfg.get('current_map')} | mode={self._spotify_profile_kind(cfg)} | X {p.get('LEFT_X')}→{p.get('RIGHT_X')} | Safe ({p.get('SAFE_PLACE_X')},{p.get('SAFE_PLACE_Y')})")
-@@ -2785,10 +2788,9 @@ class MapleNghiaPro(MapleVisionClient):
+@@ -1324,6 +1329,7 @@ class MapleNghiaPro(MapleVisionClient):
+         # V9: behavior engine is the single shutdown owner for combat/movement input.
+         self.c2_fast_supervisor_pause = True
+         self.c2_fast_worker_generation += 1
++        self.spotify_sell_inflight = False
+         self.spotify_all_cure_market.stop()
+         self.spotify_watchdog.stop()
+         self.behavior_engine.stop()
+@@ -2703,14 +2709,27 @@ class MapleNghiaPro(MapleVisionClient):
+             self.c2_fast_supervisor_pause = True
+             self.behavior_engine.release_inputs()
+             require_running = bool(self.running)
+-            ok = self.miumiu_seller.run(
+-                cfg,
+-                should_sell_etc=cfg.get("spotify_sell_etc", True),
+-                require_running=require_running,
+-            )
++            try:
++                ok = self.miumiu_seller.run(
++                    cfg,
++                    should_sell_etc=cfg.get("spotify_sell_etc", True),
++                    require_running=require_running,
++                )
++            except Exception as exc:
++                self.spotify_sell_inflight = False
++                if self.running and (self.runtime_cfg or cfg).get("auto_sell_timer_enabled"):
++                    self.spotify_sell_timer_event.set()
++                self._log(f"[-] Auto Sell MiuMiu lỗi: {exc}")
++                return
+             if ok:
++                self.spotify_watchdog.notify_sell_completed(time.monotonic())
++                self.spotify_sell_timer_event.clear()
++                self.spotify_sell_inflight = False
+                 self._log("[Auto Sell] MiuMiu parity hoàn tất.")
+             else:
++                self.spotify_sell_inflight = False
++                if self.running and (self.runtime_cfg or cfg).get("auto_sell_timer_enabled"):
++                    self.spotify_sell_timer_event.set()
+                 self._log("[-] Auto Sell MiuMiu dừng an toàn; không chạy macro mù.")
+ 
+ 
+@@ -2785,10 +2804,9 @@ class MapleNghiaPro(MapleVisionClient):
                  path_is_exact=True,
              )
              self.spotify_dead_center = dead_center if dead.matched else None
@@ -40,7 +90,7 @@ index a902ea2..426d2cf 100644
              )
              full_variants = [
                  score_full_bag_variant(
-@@ -2864,7 +2866,22 @@ class MapleNghiaPro(MapleVisionClient):
+@@ -2864,7 +2882,22 @@ class MapleNghiaPro(MapleVisionClient):
          self.spotify_sell_timer_event.set()
          self._log("[Spotify Watchdog] sell timer due")
  
@@ -63,7 +113,7 @@ index a902ea2..426d2cf 100644
          if not result.matched:
              return
          if result.kind == "captcha":
-@@ -2875,10 +2892,6 @@ class MapleNghiaPro(MapleVisionClient):
+@@ -2875,10 +2908,6 @@ class MapleNghiaPro(MapleVisionClient):
              revived = self._spotify_watchdog_request_revive(result, cfg)
              if not revived and cfg.get("alert_dead"):
                  self._handle_alert("dead", "Phát hiện trạng thái nhân vật chết.", cfg)
@@ -73,3 +123,20 @@ index a902ea2..426d2cf 100644
 -                self._handle_alert("dc", "Phát hiện mất kết nối / hộp thoại kết nối.", cfg)
          elif result.kind == "full_bag":
              self.spotify_full_bag_event.set()
+ 
+@@ -2964,11 +2993,10 @@ class MapleNghiaPro(MapleVisionClient):
+                             safe_outcome = self.behavior_engine.safe_place_step(cfg, map_pos, now) if has_safe else "FAILED"
+                             if safe_outcome == "READY":
+                                 self.spotify_full_bag_event.clear()
+-                                self.spotify_sell_timer_event.clear()
+-                                self.last_sell_time = now
+-                                self.last_timer_sell = now
+-                                self.spotify_watchdog.notify_sell_completed(now)
+-                                self.run_sell_thread(cfg)
++                                if not self.spotify_sell_inflight:
++                                    self.spotify_sell_timer_event.clear()
++                                    self.spotify_sell_inflight = True
++                                    self.run_sell_thread(cfg)
+                                 self.behavior_engine.core._spotify_reset_safe_place_state()
+                             elif safe_outcome == "FAILED":
+                                 self.spotify_full_bag_event.clear()
