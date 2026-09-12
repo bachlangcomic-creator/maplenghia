@@ -24,10 +24,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : > /tmp/v9.8-bootstrap.patch
+          : > /tmp/v9.8-bootstrap.patch.gz
           for part in $(find sync -maxdepth 1 -type f -name 'v9.8-bootstrap-part*.b64' | sort); do
-            base64 -d "$part" >> /tmp/v9.8-bootstrap.patch
+            base64 -d "$part" >> /tmp/v9.8-bootstrap.patch.gz
           done
+          test "$(sha256sum /tmp/v9.8-bootstrap.patch.gz | awk '{print $1}')" = "26546941142400e6345c26146d0abb0f6adf31473324ca2b20f122baa545b1ab"
+          gzip -dc /tmp/v9.8-bootstrap.patch.gz > /tmp/v9.8-bootstrap.patch
           test "$(sha256sum /tmp/v9.8-bootstrap.patch | awk '{print $1}')" = "a764579fb8c5588a59bd099b333d5aa085b019cb5295a6091fe042fba220604b"
           git config user.name 'OpenAI'
           git config user.email 'noreply@openai.com'
