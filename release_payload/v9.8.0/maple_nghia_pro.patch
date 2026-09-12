@@ -1,0 +1,336 @@
+diff --git a/maple_nghia_pro.py b/maple_nghia_pro.py
+index 0b6dddf..a902ea2 100644
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -49,9 +49,15 @@ from spotify_pc_alarm import (
+ from spotify_detection_parity import (
+     SpotifyDetectionResult,
+     SOURCE_NGHIA_FALLBACK,
++    detect_captcha_exact,
++    score_dead,
++    score_disconnect,
++    score_full_bag_variant,
+     score_result,
+ )
++from spotify_exact_assets import decode_exact_asset
+ from spotify_watchdog import SpotifyWatchdogWorker
++from spotify_all_cure_market import SpotifyAllCureMarketWorker
+ 
+ from maple_engine_v2 import (
+     MapleVisionClient,
+@@ -236,7 +242,9 @@ class MapleNghiaPro(MapleVisionClient):
+         self.behavior_engine = SpotifyBehaviorEngine(self)
+         self.miumiu_seller = SpotifyMiuMiuSeller(self)
+         self.spotify_watchdog = SpotifyWatchdogWorker(self)
++        self.spotify_all_cure_market = SpotifyAllCureMarketWorker(self)
+         self.spotify_full_bag_event = threading.Event()
++        self.spotify_sell_timer_event = threading.Event()
+         self.maps_data = self._read_maps()
+         self.event_log_queue = queue.Queue(maxsize=200)
+         self.ui_alert_queue = queue.Queue(maxsize=20)
+@@ -337,6 +345,7 @@ class MapleNghiaPro(MapleVisionClient):
+         self.spotify_pirate_onehit_attacked = False
+         self.spotify_sell_arrived_since = 0.0
+         self.spotify_full_bag_event.clear()
++        self.spotify_sell_timer_event.clear()
+         self.behavior_engine.core._spotify_reset_safe_place_state()
+         self.cached_dead = None
+         self.cached_dc = None
+@@ -463,6 +472,8 @@ class MapleNghiaPro(MapleVisionClient):
+         self.spotify_force_focus_parity = tk.BooleanVar(value=True)
+         # V9.7: dedicated watchdog topology. Detection semantics remain evidence-labeled.
+         self.spotify_watchdog_parity_enabled = tk.BooleanVar(value=True)
++        # Spotify F3/F7 All Cure market subsystem. Opt-in and fail-closed when reference images are unavailable.
++        self.spotify_all_cure_market_enabled = tk.BooleanVar(value=False)
+         # Nghĩa extension: C2 may learn its minimap lane Y from stable runtime samples.
+         # ON by default for stability; turn OFF for fixed-Y Spotify parity.
+         self.c2_adaptive_y_enabled = tk.BooleanVar(value=True)
+@@ -1268,6 +1279,7 @@ class MapleNghiaPro(MapleVisionClient):
+         # V9: Nghĩa owns config/UI; the Spotify behavior engine owns farm dispatch.
+         self.behavior_engine.start(cfg)
+         self.spotify_watchdog.start(cfg)
++        self.spotify_all_cure_market.start(cfg)
+         super().start_bot()
+         self.dashboard_status.set("ĐANG CHẠY")
+         if hasattr(self, "side_status"):
+@@ -1312,6 +1324,7 @@ class MapleNghiaPro(MapleVisionClient):
+         # V9: behavior engine is the single shutdown owner for combat/movement input.
+         self.c2_fast_supervisor_pause = True
+         self.c2_fast_worker_generation += 1
++        self.spotify_all_cure_market.stop()
+         self.spotify_watchdog.stop()
+         self.behavior_engine.stop()
+         self.spotify_primary_worker_generation = getattr(self, "spotify_primary_worker_generation", 0) + 1
+@@ -2011,6 +2024,7 @@ class MapleNghiaPro(MapleVisionClient):
+             "spotify_runtime_parity_mode": bool(self.spotify_runtime_parity_mode.get()),
+             "spotify_force_focus_parity": bool(self.spotify_force_focus_parity.get()),
+             "spotify_watchdog_parity_enabled": bool(self.spotify_watchdog_parity_enabled.get()),
++            "spotify_all_cure_market_enabled": bool(self.spotify_all_cure_market_enabled.get()),
+             "spotify_watchdog_parity_v1": True,
+             FOCUS_PARITY_MIGRATION_KEY: True,
+             "c2_adaptive_y_enabled": bool(self.c2_adaptive_y_enabled.get()),
+@@ -2076,6 +2090,7 @@ class MapleNghiaPro(MapleVisionClient):
+             "spotify_runtime_parity_mode": self.spotify_runtime_parity_mode.get(),
+             "spotify_force_focus_parity": self.spotify_force_focus_parity.get(),
+             "spotify_watchdog_parity_enabled": self.spotify_watchdog_parity_enabled.get(),
++            "spotify_all_cure_market_enabled": self.spotify_all_cure_market_enabled.get(),
+             "spotify_watchdog_parity_v1": True,
+             FOCUS_PARITY_MIGRATION_KEY: True,
+             "c2_adaptive_y_enabled": self.c2_adaptive_y_enabled.get(),
+@@ -2141,7 +2156,7 @@ class MapleNghiaPro(MapleVisionClient):
+                 ]
+                 bool_vars = [
+                     "focus_before_input", "pause_on_focus_loss", "spotify_runtime_parity_mode", "spotify_force_focus_parity",
+-                    "spotify_watchdog_parity_enabled",
++                    "spotify_watchdog_parity_enabled", "spotify_all_cure_market_enabled",
+                     "c2_adaptive_y_enabled", "b3_adaptive_y_enabled", "auto_loot", "auto_pet", "buff1_enabled", "buff2_enabled",
+                     "auto_sell_timer_enabled", "spotify_miumiu_sell_enabled", "spotify_sell_etc",
+                     "pc_alarm", "telegram_enabled", "alert_dead", "alert_dc",
+@@ -2699,6 +2714,19 @@ class MapleNghiaPro(MapleVisionClient):
+                 self._log("[-] Auto Sell MiuMiu dừng an toàn; không chạy macro mù.")
+ 
+ 
++    def _spotify_market_run_action(self, action_name, evidence, cfg):
++        # Side effects are serialized through the host and fail closed unless the
++        # reference transaction is complete. The supplied Spotify package does not
++        # contain its external all_cure_images assets, so V9.8 never guesses clicks.
++        self.behavior_engine.release_inputs()
++        self.c2_fast_supervisor_pause = True
++        record = evidence if isinstance(evidence, dict) else {}
++        if not record.get("complete"):
++            self._log(f"[Spotify All Cure] {action_name}: evidence/assets incomplete; action skipped.")
++            return False
++        self._log(f"[Spotify All Cure] {action_name}: executor unavailable without exact external assets.")
++        return False
++
+     # -------------------------------
+     # Detection / bot loop
+     # -------------------------------
+@@ -2713,17 +2741,81 @@ class MapleNghiaPro(MapleVisionClient):
+             return None
+         return self.capture_screen(cfg["region"], fast=cfg.get("use_fast_capture", True))
+ 
++    def _spotify_watchdog_exact_template_match(self, image, asset_name):
++        raw = decode_exact_asset(asset_name)
++        template = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
++        if template is None:
++            return 0.0, None
++        if getattr(image, "ndim", 0) == 3:
++            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
++        else:
++            gray = image
++        if gray is None or gray.shape[0] < template.shape[0] or gray.shape[1] < template.shape[1]:
++            return 0.0, None
++        score_map = cv2.matchTemplate(gray, template, cv2.TM_CCOEFF_NORMED)
++        _min_v, max_v, _min_l, max_l = cv2.minMaxLoc(score_map)
++        center = (max_l[0] + template.shape[1] / 2.0, max_l[1] + template.shape[0] / 2.0)
++        return float(max_v), center
++
++    def _spotify_watchdog_exact_template_score(self, image, asset_name):
++        score, _center = self._spotify_watchdog_exact_template_match(image, asset_name)
++        return score
++
+     def _spotify_watchdog_scan_frame(self, frame, cfg):
++        results = []
++        exact_enabled = bool(cfg.get("spotify_exact_detector_enabled", True))
++        height, width = frame.shape[:2]
++        alert_threshold = float(cfg.get("alert_threshold", 0.86))
++
++        if exact_enabled and (width, height) == (1280, 720):
++            captcha = detect_captcha_exact(
++                frame,
++                (width, height),
++                lambda roi, _raw: self._spotify_watchdog_exact_template_score(roi, "LIE_B64"),
++            )
++            results.append(captcha)
++        else:
++            captcha = None
++
++        if exact_enabled:
++            dead_score, dead_center = self._spotify_watchdog_exact_template_match(frame, "DEAD_B64")
++            dead = score_dead(
++                dead_score,
++                threshold=0.80,
++                path_is_exact=True,
++            )
++            self.spotify_dead_center = dead_center if dead.matched else None
++            disconnect = score_disconnect(
++                self._spotify_watchdog_exact_template_score(frame, "ONL_B64"),
++                threshold=alert_threshold,
++                path_is_exact=False,
++            )
++            full_variants = [
++                score_full_bag_variant(
++                    name,
++                    self._spotify_watchdog_exact_template_score(frame, name),
++                    path_is_exact=False,
++                )
++                for name in ("INV_FULL_B64", "INV_FULL_2_B64", "INV_FULL_KOREA_B64")
++            ]
++            full = max(full_variants, key=lambda r: r.score or 0.0)
++            results.extend((dead, disconnect, full))
++        else:
++            dead = disconnect = full = None
++            self.spotify_dead_center = None
++
+         bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+         gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+-        results = []
+-        specs = (
+-            ("dead", "dead_template", "alert_threshold", "cached_dead"),
+-            ("dc", "dc_template", "alert_threshold", "cached_dc"),
+-            ("captcha", "captcha_template", "alert_threshold", "cached_captcha"),
+-            ("full_bag", "full_template", "threshold", "cached_full"),
++        fallbacks = (
++            ("dead", "dead_template", "alert_threshold", "cached_dead", dead),
++            ("dc", "dc_template", "alert_threshold", "cached_dc", disconnect),
++            ("captcha", "captcha_template", "alert_threshold", "cached_captcha", captcha),
++            ("full_bag", "full_template", "threshold", "cached_full", full),
+         )
+-        for kind, path_key, threshold_key, cache_name in specs:
++        for kind, path_key, threshold_key, cache_name, recovered in fallbacks:
++            if recovered is not None and recovered.matched:
++                setattr(self, cache_name, recovered)
++                continue
+             path = str(cfg.get(path_key) or "").strip()
+             default_threshold = 0.86 if threshold_key == "alert_threshold" else 0.6
+             threshold = float(cfg.get(threshold_key, default_threshold))
+@@ -2736,14 +2828,55 @@ class MapleNghiaPro(MapleVisionClient):
+             results.append(score_result(kind, score, threshold, SOURCE_NGHIA_FALLBACK))
+         return results
+ 
++    def _spotify_watchdog_request_pause(self, reason, cfg):
++        self.c2_fast_supervisor_pause = True
++        self.behavior_engine.release_inputs()
++        self._log(f"[Spotify Watchdog] pause: {reason}")
++        return True
++
++    def _spotify_watchdog_request_revive(self, result, cfg):
++        self._spotify_watchdog_request_pause("dead", cfg)
++        center = getattr(self, "spotify_dead_center", None)
++        if not center or pydirectinput is None or not self.running:
++            self._log("[Spotify Revive] dead detected; evidenced revive target unavailable")
++            return False
++        region = cfg.get("region") or (0, 0, 0, 0)
++        left, top = int(region[0]), int(region[1])
++        x = int(round(left + center[0]))
++        y = int(round(top + center[1]))
++        try:
++            pydirectinput.moveTo(x, y, duration=0.10)
++            pydirectinput.mouseDown()
++            time.sleep(0.05)
++            pydirectinput.mouseUp()
++            self.spotify_dead_center = None
++            self._log(f"[Spotify Revive] clicked evidenced DEAD center at ({x}, {y})")
++            return True
++        except Exception as exc:
++            try:
++                pydirectinput.mouseUp()
++            except Exception:
++                pass
++            self._log(f"[Spotify Revive] action failed: {exc}")
++            return False
++
++    def _spotify_watchdog_sell_timer_due(self, cfg):
++        self.spotify_sell_timer_event.set()
++        self._log("[Spotify Watchdog] sell timer due")
++
+     def _spotify_watchdog_emit(self, result: SpotifyDetectionResult, cfg):
++        if not result.matched:
++            return
+         if result.kind == "captcha":
++            self._spotify_watchdog_request_pause("captcha", cfg)
+             if cfg.get("alert_captcha"):
+                 self._handle_alert("captcha", "Phát hiện CAPTCHA / kiểm tra. Tool đã cảnh báo, không tự giải.", cfg)
+         elif result.kind == "dead":
+-            if cfg.get("alert_dead"):
++            revived = self._spotify_watchdog_request_revive(result, cfg)
++            if not revived and cfg.get("alert_dead"):
+                 self._handle_alert("dead", "Phát hiện trạng thái nhân vật chết.", cfg)
+-        elif result.kind == "dc":
++        elif result.kind in ("dc", "disconnect"):
++            self._spotify_watchdog_request_pause("disconnect", cfg)
+             if cfg.get("alert_dc"):
+                 self._handle_alert("dc", "Phát hiện mất kết nối / hộp thoại kết nối.", cfg)
+         elif result.kind == "full_bag":
+@@ -2811,10 +2944,13 @@ class MapleNghiaPro(MapleVisionClient):
+                     else:
+                         self._run_periodic_actions(cfg, now)
+ 
+-                        timer_due = cfg.get("auto_sell_timer_enabled") and (now - self.last_timer_sell) >= cfg.get("sell_interval_minutes", 30.0) * 60.0
+                         condition_due = (not cfg.get("sell_only_when_full")) or self.spotify_full_bag_event.is_set()
+                         cooldown_ok = (now - self.last_sell_time) * 1000 >= cfg["sell_cooldown"]
+-                        sell_requested = bool(cfg.get("auto_sell") and cooldown_ok and (timer_due or condition_due))
++                        sell_requested = bool(
++                            cfg.get("auto_sell")
++                            and cooldown_ok
++                            and (self.spotify_sell_timer_event.is_set() or condition_due)
++                        )
+ 
+                         if sell_requested:
+                             # Pause C2 farm input, but its worker keeps refreshing minimap
+@@ -2828,12 +2964,15 @@ class MapleNghiaPro(MapleVisionClient):
+                             safe_outcome = self.behavior_engine.safe_place_step(cfg, map_pos, now) if has_safe else "FAILED"
+                             if safe_outcome == "READY":
+                                 self.spotify_full_bag_event.clear()
++                                self.spotify_sell_timer_event.clear()
+                                 self.last_sell_time = now
+                                 self.last_timer_sell = now
++                                self.spotify_watchdog.notify_sell_completed(now)
+                                 self.run_sell_thread(cfg)
+                                 self.behavior_engine.core._spotify_reset_safe_place_state()
+                             elif safe_outcome == "FAILED":
+                                 self.spotify_full_bag_event.clear()
++                                self.spotify_sell_timer_event.clear()
+                                 self.last_sell_time = now
+                                 self.behavior_engine.release_inputs()
+                                 self._log("[Spotify Safe] Xác minh SAFE_PLACE thất bại; hủy lượt bán.")
+@@ -2939,9 +3078,14 @@ class MapleNghiaPro(MapleVisionClient):
+             self.dashboard_status.set("ĐÃ DỪNG")
+ 
+     def poll_hotkeys(self):
+-        # Cho phép đổi hotkey trong UI. F8/F9 vẫn là mặc định.
+-        names = [self.hotkey_toggle.get().strip().upper() or "F8", self.hotkey_stop.get().strip().upper() or "F9"]
+-        # Tái sử dụng dictionary linh hoạt.
++        # F8/F9 remain configurable Nghĩa controls. Spotify binary directly maps
++        # F3 to one sell-test and F7 to the continuous All Cure buy/sell toggle.
++        names = [
++            self.hotkey_toggle.get().strip().upper() or "F8",
++            self.hotkey_stop.get().strip().upper() or "F9",
++            "F3",
++            "F7",
++        ]
+         for idx, name in enumerate(names):
+             vk = key_to_vk(name)
+             if vk is None:
+@@ -2951,11 +3095,29 @@ class MapleNghiaPro(MapleVisionClient):
+             if down and not was:
+                 if idx == 0:
+                     self.toggle_bot()
+-                else:
++                elif idx == 1:
+                     self.stop_bot()
++                elif idx == 2:
++                    cfg = dict(getattr(self, "runtime_cfg", None) or self.snapshot_settings())
++                    cfg["spotify_all_cure_market_enabled"] = True
++                    if not self.spotify_all_cure_market.request_sell(cfg):
++                        self._log("[Spotify F3] All Cure sell test unavailable: exact external assets are missing/incomplete.")
++                else:
++                    enabled = not bool(self.spotify_all_cure_market_enabled.get())
++                    self.spotify_all_cure_market_enabled.set(enabled)
++                    cfg = dict(getattr(self, "runtime_cfg", None) or self.snapshot_settings())
++                    cfg["spotify_all_cure_market_enabled"] = enabled
++                    self.runtime_cfg = dict(cfg)
++                    if enabled:
++                        self.spotify_all_cure_market.start(cfg)
++                        self._log("[Spotify F7] Auto All Cure Market ON.")
++                    else:
++                        self.spotify_all_cure_market.stop()
++                        self._log("[Spotify F7] Auto All Cure Market OFF.")
+             self.hotkey_state[name] = down
+         self.after(60, self.poll_hotkeys)
+ 
+ 
++
+ if __name__ == "__main__":
+     MapleNghiaPro().mainloop()

@@ -1,0 +1,39 @@
+{
+  "source_main_dll_sha256": "62860aeb8a80ac4a768aa8f3afafe23f079aa07e2981786e44989ad71b941cb0",
+  "source": "spotify_structural",
+  "ownership": [
+    "periodic_loot_buff_pet",
+    "auto_sell_safe_place",
+    "farm_mode_dispatch",
+    "lost_player_recovery"
+  ],
+  "locals": [
+    "get_loot_delay",
+    "get_buff_delay",
+    "last_loot_time",
+    "next_loot_delay",
+    "last_pet_feed_time",
+    "next_pet_delay",
+    "last_buff1_time",
+    "next_buff1_delay",
+    "last_buff2_time",
+    "next_buff2_delay"
+  ],
+  "farm_dispatch_symbols": [
+    "run_bunny",
+    "run_stand_still",
+    "run_pirate2",
+    "run_pirate2_1hit",
+    "run_left_and_right"
+  ],
+  "sell_symbols": [
+    "auto_sell",
+    "perform_auto_sell",
+    "get_player_position",
+    "move_to",
+    "sell_emergency_events"
+  ],
+  "start_order": [],
+  "timing": {},
+  "decision": "Current Nghia bot_loop already serializes these recovered responsibilities and delegates farm routines to SpotifyBehaviorEngine. Exact thread start/interleaving is not recovered, so V9.8 records ownership and retains the existing dispatcher instead of creating a speculative main-farm thread."
+}

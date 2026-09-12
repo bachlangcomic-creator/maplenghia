@@ -1,0 +1,12 @@
+{
+  "source_main_dll_sha256": "62860aeb8a80ac4a768aa8f3afafe23f079aa07e2981786e44989ad71b941cb0",
+  "callers": [],
+  "recovered_modes": ["FOCUS", "SPAM", "LAZY", "DYNAMIC"],
+  "evidence": [
+    "perform_dynamic_combo is present in the utils import/function table",
+    "FOCUS/combo_focus, SPAM/combo_spam and LAZY/combo_lazy constants are adjacent to the dynamic combo implementation strings",
+    "Farm modules import hold_combo_action/movement helpers directly",
+    "No recovered call-site/config/map branch associates perform_dynamic_combo with a specific farm routine"
+  ],
+  "decision": "Keep _spotify_dynamic_combo_reconstructed definition-only; do not wire a farm path by inference."
+}

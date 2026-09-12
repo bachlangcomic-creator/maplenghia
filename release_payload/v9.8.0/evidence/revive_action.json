@@ -1,0 +1,9 @@
+{
+  "asset": "DEAD_B64",
+  "detector_threshold": 0.8,
+  "target": "matched_template_center",
+  "move_duration_s": 0.1,
+  "mouse_down_s": 0.05,
+  "source": "spotify_structural",
+  "raw_cluster": ["find_image_center", "DEAD_B64", "0.8", "pydirectinput", "moveTo", "0.1", "mouseDown", "0.05", "mouseUp"]
+}

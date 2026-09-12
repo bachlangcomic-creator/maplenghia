@@ -1,0 +1,66 @@
+{
+  "source_binary_sha256": "6816a9acbf3feb4aa12da996d309844c7335f0fc6726dacbc4b78c94306adbed",
+  "source_main_dll_sha256": "62860aeb8a80ac4a768aa8f3afafe23f079aa07e2981786e44989ad71b941cb0",
+  "evidence_level": "spotify_structural",
+  "external_asset_directory": "all_cure_images",
+  "reference_package_contains_assets": false,
+  "coordinates": {
+    "TAB_USE_MARKET": [115, 543],
+    "AVERAGE_PRICE_POSITION": [766, 397],
+    "encoding_note": "Decoded from the Nuitka constant stream using the same integer encoding that yields GAME_WIDTH=1280 and GAME_HEIGHT=720."
+  },
+  "buy": {
+    "complete": false,
+    "quantity": 100,
+    "required_assets": [
+      "all_cure_images/empty.png",
+      "all_cure_images/npc_all_cure.png",
+      "all_cure_images/all_cure_line.png",
+      "all_cure_images/confirm_all_cure.png",
+      "all_cure_images/buy_all_cure.png",
+      "all_cure_images/finish_buying.png"
+    ],
+    "steps": [
+      "check_empty_slot",
+      "find_npc_all_cure",
+      "click_all_cure_line",
+      "enter_quantity_100",
+      "confirm_all_cure",
+      "click_buy_all_cure",
+      "click_finish_buying"
+    ],
+    "blocked_reason": "Required external all_cure_images PNG files are referenced by Spotify but are absent from the supplied Offline NoLogin package and are not embedded as named base64 assets."
+  },
+  "sell": {
+    "complete": false,
+    "required_assets": [
+      "all_cure_images/shop.png",
+      "all_cure_images/exit.png",
+      "all_cure_images/all_cure_pots.png",
+      "all_cure_images/set_sell_item.png",
+      "all_cure_images/confirm_set_item_to_sell.png",
+      "all_cure_images/complete_set_item.png"
+    ],
+    "steps": [
+      "find_shop",
+      "wait_exit",
+      "click_tab_use_market",
+      "find_all_cure_pots",
+      "click_set_sell_item",
+      "click_average_price_position",
+      "confirm_set_item_to_sell",
+      "press_enter",
+      "wait_complete_set_item",
+      "close_market"
+    ],
+    "blocked_reason": "Required external all_cure_images PNG files are absent from the supplied reference package."
+  },
+  "hotkeys": {
+    "F3": "run sell_all_cure_loop once as a test",
+    "F7": "toggle continuous buy_all_cure_loop then sell_all_cure_loop"
+  },
+  "loop_delays_seconds": {
+    "buy_to_sell": 1.0,
+    "failure_retry": 2.0
+  }
+}
