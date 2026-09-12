@@ -1,10 +1,10 @@
 {
-  "version": "9.8.0",
+  "version": "9.8.1",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.0/NghiaEdition_Update_v9.8.0.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.0/NghiaEdition_Update_v9.8.0.zip",
-  "sha256": "2f7c81aa6bfef7e8a0a4f67d55b91383fd4d9875c5255670247450d9da25d560",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.1/NghiaEdition_Update_v9.8.1.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.1/NghiaEdition_Update_v9.8.1.zip",
+  "sha256": "189e3b30c3c83c1da2efa5dde748ba9a9d6d7f0804e72db6beb71941816ae5a1",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "Spotify Exact Detector & Watchdog Recovery: exact recovered detector assets, dead-center revive, watchdog-owned sell scheduling, and evidence-gated All Cure flow. Session monitor is intentionally excluded; CAPTCHA remains detect/pause/alert only."
+  "notes": "Spotify Hold Combo Parity: recovered shared Teleport+Skill cadence for C1/C2/B1/B3 and Pirate Den, with Pirate Den 1 Hit farm semantics preserved."
 }
