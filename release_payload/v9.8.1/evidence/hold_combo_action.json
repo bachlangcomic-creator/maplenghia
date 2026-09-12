@@ -1,0 +1,16 @@
+{
+  "feature": "hold_combo_action",
+  "evidence_level": "direct-binary-plus-structural-call-reconstruction",
+  "recovered_signature": ["direction", "flash_key", "skill_key", "hold_time"],
+  "helper_hold_time_unit": "seconds",
+  "teleport_to_skill_wait_seconds": [0.015, 0.045],
+  "post_skill_wait_seconds": [0.125, 0.255],
+  "simple_farm_window_seconds": [0.2, 0.5],
+  "pirate_normal_farm_window_seconds": [0.2, 0.5],
+  "pirate_normal_loot_sweep_seconds": 1.6,
+  "pirate_one_hit_loot_sweep_seconds": 1.5,
+  "active_callers": ["C1", "C2", "B1", "B3", "PIRATE2_NORMAL"],
+  "one_hit_farm_uses_shared_combo": false,
+  "dynamic_combo_active_for_these_callers": false,
+  "pirate_laptop_in_scope": false
+}
