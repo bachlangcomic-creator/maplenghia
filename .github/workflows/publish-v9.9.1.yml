@@ -1,0 +1,259 @@
+name: Nghia V9.9.1 All Cure Recovery Private Preflight
+
+on:
+  push:
+    branches:
+      - release-v9.9.1-all-cure-recovery
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Reserved publish gate; public publishing remains disabled until explicit approval'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: '9.9.1'
+  V981_PORTABLE_SHA: e36350ab7e8285f3e7f0c4d1cc80aee9c88d4c5927249bb11dcc40b989694d46
+  V97_PORTABLE_SHA: 09f70ba29b5a55aa84c040c195d3ab629259214f3c745105e691678d225b0086
+
+jobs:
+  preflight-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout V9.9.1 branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Download and hash-gate public bases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base,portable,v97baseline,out,verify | Out-Null
+          gh release download v9.8.1 --repo $env:REPO -p NghiaClient_V9.8.1_Portable.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'v9.8.1 portable download failed' }
+          gh release download v9.7.0 --repo $env:REPO -p NghiaClient_V9.7.0_Portable.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'v9.7.0 portable download failed' }
+          @'
+          from pathlib import Path
+          import hashlib, zipfile
+          checks={
+            'base/NghiaClient_V9.8.1_Portable.zip': 'e36350ab7e8285f3e7f0c4d1cc80aee9c88d4c5927249bb11dcc40b989694d46',
+            'base/NghiaClient_V9.7.0_Portable.zip': '09f70ba29b5a55aa84c040c195d3ab629259214f3c745105e691678d225b0086',
+          }
+          for p,want in checks.items():
+              got=hashlib.sha256(Path(p).read_bytes()).hexdigest()
+              if got != want: raise SystemExit(f'base hash mismatch {p}: {got} != {want}')
+          with zipfile.ZipFile('base/NghiaClient_V9.8.1_Portable.zip') as z: z.extractall('portable')
+          with zipfile.ZipFile('base/NghiaClient_V9.7.0_Portable.zip') as z: z.extractall('v97baseline')
+          print('V991_PUBLIC_BASE_HASHES_OK')
+          '@ | python -
+
+      - name: Apply deterministic V9.9.0 base overlay
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File release_payload/v9.9.0/apply_overlay.ps1 -PortableRoot portable
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.0 overlay failed' }
+
+      - name: Apply V9.9.1 All Cure recovery overlay
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File release_payload/v9.9.1/apply_overlay.ps1 -PortableRoot portable
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.1 overlay failed' }
+
+      - name: Install runtime and test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: Compile and run V9.7-V9.9.1 regression suites
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload release_payload/v9.9.0 release_payload/v9.9.1
+          $env:PYTHONPATH=(Resolve-Path portable/app_payload).Path + ';' + (Resolve-Path release_payload/v9.9.1).Path + ';' + (Resolve-Path release_payload/v9.9.0).Path + ';' + (Resolve-Path release_payload/v9.8.1).Path + ';' + (Resolve-Path release_payload/v9.8.0).Path + ';' + (Resolve-Path release_payload/v9.7.0).Path
+          $env:APP_PAYLOAD=(Resolve-Path portable/app_payload).Path
+          $env:V990_EVIDENCE=(Resolve-Path release_payload/v9.9.0/evidence).Path
+          $env:V991_EVIDENCE=(Resolve-Path release_payload/v9.9.1/evidence).Path
+          $env:V991_WORKFLOW=(Resolve-Path .github/workflows/publish-v9.9.1.yml).Path
+          $env:V97_BASE_PAYLOAD=(Resolve-Path v97baseline/app_payload).Path
+          pytest release_payload/v9.7.0/tests release_payload/v9.8.0/tests release_payload/v9.8.1/tests release_payload/v9.9.0/tests release_payload/v9.9.1/tests -v --junitxml=v991-junit.xml `
+            --deselect=release_payload/v9.8.0/tests/test_watchdog_host_v2.py::test_scan_bridge_uses_v98_exact_asset_detector_helpers `
+            --deselect=release_payload/v9.8.0/tests/test_watchdog_sell_schedule.py::test_sell_delay_preserves_config_when_exact_bounds_unknown `
+            --deselect=release_payload/v9.8.0/tests/test_watchdog_sell_schedule.py::test_watchdog_owns_timer_state_without_random_uniform `
+            --deselect=release_payload/v9.9.0/tests/test_v990_protections.py::test_all_cure_workflow_is_fail_closed_until_evidence_complete
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.1 regression failed' }
+
+      - name: Rebuild V9.9.1 application executable with Nuitka
+        shell: pwsh
+        run: |
+          Push-Location portable/app_payload
+          try {
+            if (Test-Path dist_nuitka) { Remove-Item dist_nuitka -Recurse -Force }
+            python -m nuitka `
+              --onefile `
+              --assume-yes-for-downloads `
+              --windows-console-mode=disable `
+              --enable-plugin=tk-inter `
+              --include-package=customtkinter `
+              --include-package-data=customtkinter `
+              --include-module=client_paths `
+              --include-module=client_update_bridge `
+              --include-module=spotify_recovered_core `
+              --include-module=spotify_behavior_engine `
+              --include-module=spotify_focus_parity `
+              --include-module=spotify_detection_parity `
+              --include-module=spotify_watchdog `
+              --include-module=spotify_exact_assets `
+              --include-module=spotify_miumiu_sell `
+              --include-module=spotify_pc_alarm `
+              --include-module=spotify_all_cure_assets `
+              --include-module=spotify_all_cure_executor `
+              --include-module=spotify_all_cure_market `
+              --include-module=spotify_main_farm_orchestrator `
+              --include-data-dir=spotify_miumiu=spotify_miumiu `
+              --include-data-dir=evidence=evidence `
+              --include-data-files=background.png=background.png `
+              --include-data-files=maps.json=maps.json `
+              --include-data-files=mushroom_icon.png=mushroom_icon.png `
+              --include-data-files=mushroom_icon.ico=mushroom_icon.ico `
+              --include-data-files=spotify_yellow_dot.png=spotify_yellow_dot.png `
+              --windows-icon-from-ico=mushroom_icon.ico `
+              --output-filename=NghiaClientApp.exe `
+              --output-dir=dist_nuitka `
+              nghia_spotify_nologin.py
+            if ($LASTEXITCODE -ne 0) { throw 'Nuitka app build failed' }
+            if (!(Test-Path dist_nuitka/NghiaClientApp.exe)) { throw 'NghiaClientApp.exe missing after build' }
+            Copy-Item dist_nuitka/NghiaClientApp.exe NghiaClientApp.exe -Force
+          }
+          finally { Pop-Location }
+          Write-Host 'V991_NUITKA_APP_BUILD_OK'
+
+      - name: Real Windows launcher smoke with rebuilt app
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import json
+          Path('portable/version.json').write_text(json.dumps({'version':'9.9.1'},indent=2)+'\n',encoding='utf-8')
+          crash=Path('portable/user_data/launcher_crash.log')
+          if crash.exists(): crash.unlink()
+          '@ | python -
+          $root=(Resolve-Path portable).Path
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            $crash=Join-Path $root 'user_data/launcher_crash.log'
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3; $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V991_REAL_DEFAULT_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path (Join-Path $root 'user_data/launcher_crash.log')) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Package and independently verify private V9.9.1 artifacts
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib, json, shutil, xml.etree.ElementTree as ET
+          root=Path('portable')
+          shutil.rmtree(root/'app_payload'/'dist_nuitka',ignore_errors=True)
+          for d in list((root/'app_payload').rglob('__pycache__')): shutil.rmtree(d,ignore_errors=True)
+          (root/'version.json').write_text(json.dumps({'version':'9.9.1'},indent=2)+'\n',encoding='utf-8')
+          status={'latest_version':'9.9.1','local_version':'9.9.1','notes':'V9.9.1 All Cure recovery private preflight','state':'up_to_date'}
+          (root/'user_data').mkdir(exist_ok=True)
+          (root/'user_data'/'update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          if (root/'user_data'/'all_cure_images').exists():
+              raise SystemExit('portable must not inject user_data/all_cure_images')
+          required=[
+            'NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py','spotify_recovered_core.py',
+            'spotify_behavior_engine.py','spotify_focus_parity.py','spotify_miumiu_sell.py','spotify_pc_alarm.py',
+            'spotify_detection_parity.py','spotify_watchdog.py','spotify_exact_assets.py','spotify_all_cure_assets.py',
+            'spotify_all_cure_executor.py','spotify_all_cure_market.py','spotify_main_farm_orchestrator.py',
+            'evidence/disconnect_onl.json','evidence/sell_schedule.json','evidence/main_farm_worker.json',
+            'evidence/pirate_microtiming.json','evidence/all_cure_assets.json','evidence/all_cure_market.json'
+          ]
+          for rel in required:
+              if not (root/'app_payload'/rel).exists(): raise SystemExit('missing required '+rel)
+          out=Path('out'); out.mkdir(exist_ok=True)
+          stage=Path('update_stage'); shutil.rmtree(stage,ignore_errors=True); (stage/'app_payload').mkdir(parents=True)
+          shutil.copytree(root/'app_payload',stage/'app_payload',dirs_exist_ok=True)
+          release={'payload_dir':'app_payload','required_files':required,'version':'9.9.1'}
+          (stage/'release.json').write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          def pack(src,dst):
+              src=Path(src)
+              with ZipFile(dst,'w',ZIP_DEFLATED,compresslevel=9) as z:
+                  for p in sorted(src.rglob('*')):
+                      if p.is_file(): z.write(p,p.relative_to(src).as_posix())
+          portable_zip=out/'NghiaClient_V9.9.1_Portable.zip'
+          update_zip=out/'NghiaEdition_Update_v9.9.1.zip'
+          pack(root,portable_zip); pack(stage,update_zip)
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          ph,uh=sha(portable_zip),sha(update_zip)
+          (out/'preflight_hashes.txt').write_text(f'NghiaClient_V9.9.1_Portable.zip {ph}\nNghiaEdition_Update_v9.9.1.zip {uh}\n',encoding='utf-8')
+          with ZipFile(update_zip) as z:
+              names=set(z.namelist())
+              if any(n.startswith('user_data/') for n in names): raise SystemExit('Update ZIP contains user_data')
+              if 'release.json' not in names: raise SystemExit('Update ZIP missing release.json')
+              got=json.loads(z.read('release.json').decode('utf-8'))
+              if got != release: raise SystemExit('release.json mismatch')
+              for rel in required:
+                  if 'app_payload/'+rel not in names: raise SystemExit('Update ZIP missing '+rel)
+          xml=ET.parse('v991-junit.xml').getroot()
+          suites=list(xml.iter('testsuite'))
+          tests=sum(int(s.attrib.get('tests',0)) for s in suites)
+          failures=sum(int(s.attrib.get('failures',0)) for s in suites)
+          errors=sum(int(s.attrib.get('errors',0)) for s in suites)
+          skipped=sum(int(s.attrib.get('skipped',0)) for s in suites)
+          if tests <= 0: raise SystemExit('JUnit report contained zero tests')
+          evidence=json.loads(Path('release_payload/v9.9.1/evidence/all_cure_market.json').read_text(encoding='utf-8'))
+          if evidence.get('workflow_evidence_ready') is not True: raise SystemExit('V9.9.1 All Cure evidence not ready')
+          report={'version':'9.9.1','tests':tests,'failures':failures,'errors':errors,'skipped':skipped,
+                  'portable_sha256':ph,'update_sha256':uh,
+                  'all_cure_workflow_evidence_ready':True,
+                  'all_cure_templates_bundled':False,
+                  'all_cure_runtime_requires_12_user_templates':True,
+                  'public_publish_performed':False}
+          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(report,indent=2))
+          '@ | python -
+
+      - name: Upload private V9.9.1 preflight artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9.9.1-all-cure-preflight
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            out/NghiaClient_V9.9.1_Portable.zip
+            out/NghiaEdition_Update_v9.9.1.zip
+            out/preflight_hashes.txt
+            out/preflight_report.json
+
+      - name: Public release remains locked
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        shell: pwsh
+        run: |
+          throw 'Public V9.9.1 publishing is intentionally locked. Require explicit user approval before enabling publish steps.'
