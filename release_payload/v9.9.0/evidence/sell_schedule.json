@@ -1,0 +1,21 @@
+{
+  "feature": "auto_sell_schedule",
+  "direct_constants": [10, 10, 1.2, 60],
+  "direct_symbols": ["max", "random.uniform", "get_next_sell_delay", "last_sell_time", "next_sell_delay"],
+  "formula": {
+    "value": "random.uniform(max(10, sell_interval_minutes - 10), sell_interval_minutes * 1.2) * 60",
+    "evidence": "high_structural"
+  },
+  "timer_owner": {
+    "value": "watchdog",
+    "evidence": "high_structural"
+  },
+  "malformed_interval_clamp": {
+    "value": "if high_minutes < low_minutes: high_minutes = low_minutes",
+    "evidence": "nghia_fallback"
+  },
+  "sell_inflight_guard": {
+    "value": "host prevents duplicate seller dispatch and re-arms pending request after failure/cancel",
+    "evidence": "nghia_fallback"
+  }
+}
