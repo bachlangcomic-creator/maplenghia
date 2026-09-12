@@ -1,0 +1,50 @@
+{
+  "feature": "all_cure_market",
+  "quantity": {"value": 100, "evidence": "direct"},
+  "coordinates": {
+    "TAB_USE_MARKET": {"value": [115, 543], "evidence": "high_structural"},
+    "AVERAGE_PRICE_POSITION": {"value": [766, 397], "evidence": "high_structural"}
+  },
+  "loop_delays_seconds": {
+    "buy_to_sell": {"value": 1.0, "evidence": "high_structural"},
+    "failure_retry": {"value": 2.0, "evidence": "high_structural"}
+  },
+  "known_match_parameters": {
+    "empty.png": {"threshold": 0.9, "evidence": "high_structural"},
+    "all_cure_pots.png": {"threshold": 0.75, "evidence": "high_structural"},
+    "set_sell_item.png": {"threshold": 0.60, "evidence": "high_structural"}
+  },
+  "workflow_evidence_ready": false,
+  "buy_actions": [
+    {"op": "find", "asset": "empty.png", "threshold": 0.9, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "npc_all_cure.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "all_cure_line.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "paste_text", "text": "100", "evidence": "direct"},
+    {"op": "wait_click", "asset": "confirm_all_cure.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "buy_all_cure.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "finish_buying.png", "threshold": null, "evidence": "high_structural"}
+  ],
+  "sell_actions": [
+    {"op": "wait_click", "asset": "shop.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "exit.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "click_xy", "x": 115, "y": 543, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "all_cure_pots.png", "threshold": 0.75, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "set_sell_item.png", "threshold": 0.60, "evidence": "high_structural"},
+    {"op": "click_xy", "x": 766, "y": 397, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "confirm_set_item_to_sell.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "press_key", "key": "ENTER", "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "complete_set_item.png", "threshold": null, "evidence": "high_structural"},
+    {"op": "wait_click", "asset": "exit.png", "threshold": null, "evidence": "high_structural"}
+  ],
+  "unresolved": [
+    "buy.npc_all_cure.png.threshold",
+    "buy.all_cure_line.png.threshold",
+    "buy.confirm_all_cure.png.threshold",
+    "buy.buy_all_cure.png.threshold",
+    "buy.finish_buying.png.threshold",
+    "sell.shop.png.threshold",
+    "sell.exit.png.threshold",
+    "sell.confirm_set_item_to_sell.png.threshold",
+    "sell.complete_set_item.png.threshold"
+  ]
+}

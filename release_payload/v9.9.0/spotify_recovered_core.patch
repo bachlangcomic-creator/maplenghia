@@ -1,0 +1,178 @@
+--- a/spotify_recovered_core.py
++++ b/spotify_recovered_core.py
+@@ -113,8 +113,10 @@
+ 
+ # Farm.pirate2 / pirate2_1hit constants recovered from the binary.
+ SPOTIFY_PIRATE_TOLERANCE = 5.0
++SPOTIFY_PIRATE_FALL_CONFIRM_S = 2.5
++SPOTIFY_PIRATE_RECOVERY_MS = (200, 600)
+ SPOTIFY_PIRATE_STUCK_SECONDS = 2.0
+-SPOTIFY_PIRATE_1HIT_STUCK_SECONDS = 1.5
++SPOTIFY_PIRATE_1HIT_STUCK_TIMEOUT_S = 1.5
+ SPOTIFY_PIRATE_LOOT_BASE_SECONDS = 90.0
+ SPOTIFY_PIRATE_LOOT_JITTER = (0.9, 1.1)
+ SPOTIFY_PIRATE_TOP_LOOT_POS = (135.0, 177.0)
+@@ -130,9 +132,9 @@
+ SPOTIFY_PIRATE_TOP_CAST_RIGHT_X = 136.0
+ SPOTIFY_PIRATE_TOP_CAST_Y = 177.0
+ SPOTIFY_PIRATE_TOP_CAST_HOLD_MS = (800, 1500)
+-SPOTIFY_PIRATE_TOP_CAST_SETTLE = (0.2, 0.5)
++SPOTIFY_PIRATE_TOP_CAST_SETTLE_S = (0.2, 0.5)
+ SPOTIFY_PIRATE_TOP_FACE_PAUSE = 0.05
+-SPOTIFY_PIRATE_TOP_FLASH_HOLD_MS = (100, 150)
++SPOTIFY_PIRATE_TOP_TELEPORT_HOLD_MS = (100, 150)
+ SPOTIFY_PIRATE_TOP_SKILL_HOLD_MS = (1000, 1500)
+ SPOTIFY_PIRATE_TOP_AFTER_LEFT = 0.2
+ SPOTIFY_PIRATE_TOP_RETURN_POS = (114.0, 172.0)
+@@ -144,26 +146,26 @@
+ # symmetric LEFT/RIGHT loop, random.random()<0.08, jump-key randint(150,300), sleep(0.05),
+ # and hold_combo_action(..., hold_time=randint(200,500)/1000). The 0.08 branch is
+ # applied in the farm tail, not artificially attached to endpoint reversal.
+-SPOTIFY_PIRATE_FARM_EDGE_CHANCE = 0.08
+-SPOTIFY_PIRATE_FARM_EDGE_JUMP_MS = (150, 300)
++SPOTIFY_PIRATE_EDGE_JUMP_CHANCE = 0.08
++SPOTIFY_PIRATE_EDGE_JUMP_MS = (150, 300)
+ SPOTIFY_PIRATE_FARM_HOLD_MS = (200, 500)
+-SPOTIFY_PIRATE_FARM_TURN_SLEEP = 0.05
++SPOTIFY_PIRATE_TURN_SETTLE_S = 0.05
+ SPOTIFY_PIRATE_LOOT_PRESS_MS = (100, 150)
+ 
+-SPOTIFY_PIRATE_LOOT_DOWN_SETTLE = (0.5, 0.8)
++SPOTIFY_PIRATE_BOTTOM_SETTLE_S = (0.5, 0.8)
+ SPOTIFY_PIRATE_LOOT_COMBO_MS = (200, 500)
+ SPOTIFY_PIRATE_SWEEP_HOLD_SECONDS = 1.6
+ SPOTIFY_PIRATE_SWEEP_TOLERANCE = 6.0
+ SPOTIFY_PIRATE_BOT2_TOLERANCE = 10.0
+ SPOTIFY_PIRATE_SWEEP_SETTLE = (0.1, 0.3)
+ SPOTIFY_PIRATE_1HIT_RIGHT_POS = (178.0, 183.0)
+-SPOTIFY_PIRATE_1HIT_RIGHT_WAIT_MS = (300, 1500)
+-SPOTIFY_PIRATE_1HIT_LEFT_WAIT_SECONDS = 1.5
++SPOTIFY_PIRATE_1HIT_RIGHT_WAIT_S = (0.3, 1.5)
++SPOTIFY_PIRATE_1HIT_LEFT_WAIT_S = 1.5
+ SPOTIFY_PIRATE_1HIT_TOP_FACE_PAUSE = 0.05
+ SPOTIFY_PIRATE_1HIT_TOP_AFTER_LOOT = 0.2
+ SPOTIFY_PIRATE_1HIT_TOP_RETURN_SETTLE_MS = (200, 400)
+ SPOTIFY_PIRATE_STUCK_ESCAPE_SLEEP = 0.1
+-SPOTIFY_PIRATE_FALL_RELEASE_SLEEP = 0.01
++SPOTIFY_PIRATE_RECOVERY_RELEASE_SETTLE_S = 0.01
+ SPOTIFY_PIRATE_SWEEP_NEXT_TAP_SECONDS = (0.1, 0.3)
+ SPOTIFY_PIRATE_1HIT_SWEEP_HOLD_SECONDS = 1.5
+ SPOTIFY_PIRATE_TOP_LEFT_KEY_SETTLE = 0.01
+@@ -1786,7 +1788,7 @@
+                 if jump_key:
+                     self._spotify_input_semantic(
+                         cfg, "JUMP", jump_key,
+-                        hold_ms=random.randint(*SPOTIFY_R54_FALL_RECOVERY_ACTION_MS))
++                        hold_ms=random.randint(*SPOTIFY_PIRATE_RECOVERY_MS))
+                 self.spotify_r54_fall_kick_done = True
+ 
+             # Recover toward the nearer endpoint on the expected farm Y.
+@@ -2079,18 +2081,18 @@
+         if not self.spotify_pirate_fall_start:
+             self.spotify_pirate_fall_start = now
+             return True
+-        if now - self.spotify_pirate_fall_start < SPOTIFY_FALL_CONFIRM_SECONDS:
++        if now - self.spotify_pirate_fall_start < SPOTIFY_PIRATE_FALL_CONFIRM_S:
+             self.release_move()
+             return True
+         self._log("[Spotify Pirate2] Rớt khỏi sàn farm -> Tự động quay về")
+         if not getattr(self, "spotify_r54_pirate_fall_kick_done", False):
+             self.release_move()
+-            time.sleep(SPOTIFY_PIRATE_FALL_RELEASE_SLEEP)
++            time.sleep(SPOTIFY_PIRATE_RECOVERY_RELEASE_SETTLE_S)
+             jump_key = cfg.get("jump_key")
+             if jump_key:
+                 self._spotify_input_semantic(
+                     cfg, "JUMP", jump_key,
+-                    hold_ms=random.randint(*SPOTIFY_R54_FALL_RECOVERY_ACTION_MS))
++                    hold_ms=random.randint(*SPOTIFY_PIRATE_RECOVERY_MS))
+             self.spotify_r54_pirate_fall_kick_done = True
+         left = (float(p.get("LEFT_X", px)), float(p.get("LEFT_Y", py)))
+         right = (float(p.get("RIGHT_X", px)), float(p.get("RIGHT_Y", py)))
+@@ -2133,7 +2135,7 @@
+             self.spotify_pirate_last_farm_pos_time = now
+             return False
+ 
+-        stuck_after = SPOTIFY_PIRATE_1HIT_STUCK_SECONDS if one_hit else SPOTIFY_PIRATE_STUCK_SECONDS
++        stuck_after = SPOTIFY_PIRATE_1HIT_STUCK_TIMEOUT_S if one_hit else SPOTIFY_PIRATE_STUCK_SECONDS
+         if now - self.spotify_pirate_last_farm_pos_time >= stuck_after:
+             prefix = "[Bot Farm 1-Hit]" if one_hit else "[Bot Farm]"
+             self._log(f"{prefix} Phát hiện bị kẹt, đang thoát kẹt!")
+@@ -2255,7 +2257,7 @@
+                         self._spotify_hold_action_legacy(
+                             cfg, direction_key, skill_key,
+                             hold_time=random.randint(*SPOTIFY_PIRATE_TOP_CAST_HOLD_MS) / 1000.0)
+-                    time.sleep(random.uniform(*SPOTIFY_PIRATE_TOP_CAST_SETTLE))
++                    time.sleep(random.uniform(*SPOTIFY_PIRATE_TOP_CAST_SETTLE_S))
+ 
+                     # Machine-register tracking for recovered source lines 78..84:
+                     #   line 78  -> LEFT keyUp
+@@ -2277,7 +2279,7 @@
+                     if flash_key:
+                         self._spotify_input_semantic(
+                             cfg, "TELEPORT", flash_key,
+-                            hold_ms=random.randint(*SPOTIFY_PIRATE_TOP_FLASH_HOLD_MS))
++                            hold_ms=random.randint(*SPOTIFY_PIRATE_TOP_TELEPORT_HOLD_MS))
+ 
+                     left_held = self._input_key_down(left_key)
+                     time.sleep(SPOTIFY_PIRATE_TOP_LEFT_KEY_SETTLE)
+@@ -2417,7 +2419,7 @@
+                 arrived = self._spotify_move_to_step(
+                     cfg, map_pos, *start_pt, now, tolerance_x=6.0, tolerance_y=8.0)
+                 if arrived:
+-                    time.sleep(random.uniform(*SPOTIFY_PIRATE_LOOT_DOWN_SETTLE))
++                    time.sleep(random.uniform(*SPOTIFY_PIRATE_BOTTOM_SETTLE_S))
+                     self.spotify_pirate_loot_substate = "TO_FIRST"
+                     self.spotify_pirate_phase_started = time.monotonic()
+                     self._spotify_reset_move_to_state()
+@@ -2534,24 +2536,24 @@
+         if self.map_move_direction > 0 and px >= right_x - tol:
+             self.release_move()
+             jump_key = str(cfg.get("jump_key") or "").strip()
+-            if jump_key and random.random() < SPOTIFY_PIRATE_FARM_EDGE_CHANCE:
++            if jump_key and random.random() < SPOTIFY_PIRATE_EDGE_JUMP_CHANCE:
+                 self._spotify_input_semantic(
+                     cfg, "JUMP", jump_key,
+-                    hold_ms=random.randint(*SPOTIFY_PIRATE_FARM_EDGE_JUMP_MS))
++                    hold_ms=random.randint(*SPOTIFY_PIRATE_EDGE_JUMP_MS))
+             self.map_move_direction = -1
+-            time.sleep(SPOTIFY_PIRATE_FARM_TURN_SLEEP)
++            time.sleep(SPOTIFY_PIRATE_TURN_SETTLE_S)
+             self.spotify_pirate_farm_next_attack = 0.0
+             return True
+ 
+         if self.map_move_direction < 0 and px <= left_x + tol:
+             self.release_move()
+             jump_key = str(cfg.get("jump_key") or "").strip()
+-            if jump_key and random.random() < SPOTIFY_PIRATE_FARM_EDGE_CHANCE:
++            if jump_key and random.random() < SPOTIFY_PIRATE_EDGE_JUMP_CHANCE:
+                 self._spotify_input_semantic(
+                     cfg, "JUMP", jump_key,
+-                    hold_ms=random.randint(*SPOTIFY_PIRATE_FARM_EDGE_JUMP_MS))
++                    hold_ms=random.randint(*SPOTIFY_PIRATE_EDGE_JUMP_MS))
+             self.map_move_direction = 1
+-            time.sleep(SPOTIFY_PIRATE_FARM_TURN_SLEEP)
++            time.sleep(SPOTIFY_PIRATE_TURN_SETTLE_S)
+             self.spotify_pirate_farm_next_attack = 0.0
+             return True
+ 
+@@ -2594,8 +2596,8 @@
+                 cfg, map_pos, *SPOTIFY_PIRATE_1HIT_RIGHT_POS, now,
+                 tolerance_x=5.0, tolerance_y=5.0, check_stuck=False, flash_range=999.0)
+             if arrived:
+-                wait_ms = random.randint(*SPOTIFY_PIRATE_1HIT_RIGHT_WAIT_MS)
+-                self.spotify_pirate_onehit_wait_until = time.monotonic() + wait_ms / 1000.0
++                wait_s = random.uniform(*SPOTIFY_PIRATE_1HIT_RIGHT_WAIT_S)
++                self.spotify_pirate_onehit_wait_until = time.monotonic() + wait_s
+                 self.spotify_pirate_onehit_state = "RIGHT_WAIT"
+                 self.spotify_pirate_onehit_attacked = False
+                 self.release_move()
+@@ -2640,7 +2642,7 @@
+             if px <= left_x + SPOTIFY_PIRATE_TOLERANCE:
+                 self.release_move()
+                 self.spotify_pirate_onehit_state = "LEFT_WAIT"
+-                self.spotify_pirate_onehit_wait_until = now + SPOTIFY_PIRATE_1HIT_LEFT_WAIT_SECONDS
++                self.spotify_pirate_onehit_wait_until = now + SPOTIFY_PIRATE_1HIT_LEFT_WAIT_S
+                 self.spotify_pirate_onehit_attacked = False
+                 self._log("[Bot Farm 1-Hit] Tới Rìa Trái -> Chờ 1.5s cho quái spawn...")
+                 return True

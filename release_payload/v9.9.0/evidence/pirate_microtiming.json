@@ -1,0 +1,32 @@
+{
+  "feature": "pirate_microtiming",
+  "normal": {
+    "farm_combo_ms": {"value": [200, 500], "evidence": "high_structural"},
+    "fall_confirm_s": {"value": 2.5, "evidence": "high_structural"},
+    "recovery_ms": {"value": [200, 600], "evidence": "high_structural"},
+    "recovery_release_settle_s": {"value": 0.01, "evidence": "high_structural"},
+    "edge_jump_chance": {"value": 0.08, "evidence": "high_structural"},
+    "edge_jump_ms": {"value": [150, 300], "evidence": "high_structural"},
+    "turn_settle_s": {"value": 0.05, "evidence": "high_structural"},
+    "bottom_loot_interval_s": {"value": [81, 99], "evidence": "high_structural", "derivation": "90-second recovered base multiplied by recovered 0.9..1.1 jitter"},
+    "bottom_descent_settle_s": {"value": [0.5, 0.8], "evidence": "high_structural"},
+    "sweep_hold_s": {"value": 1.6, "evidence": "high_structural"},
+    "top_cast_hold_ms": {"value": [800, 1500], "evidence": "high_structural"},
+    "top_cast_settle_s": {"value": [0.2, 0.5], "evidence": "high_structural"},
+    "top_teleport_hold_ms": {"value": [100, 150], "evidence": "high_structural"},
+    "top_skill_hold_ms": {"value": [1000, 1500], "evidence": "high_structural"},
+    "top_route": {"value": {"cast": [135, 177], "return": [114, 172]}, "evidence": "high_structural"}
+  },
+  "one_hit": {
+    "right_setup": {"value": [178, 183], "evidence": "high_structural", "basis": "coordinate constants plus 1-Hit RIGHT_SETUP branch/log adjacency"},
+    "right_wait_s": {"value": [0.3, 1.5], "evidence": "high_structural"},
+    "left_wait_s": {"value": 1.5, "evidence": "high_structural", "basis": "direct left-edge log plus state/constant reconstruction"},
+    "stuck_timeout_s": {"value": 1.5, "evidence": "high_structural"},
+    "fall_confirm_s": {"value": 2.5, "evidence": "high_structural"},
+    "recovery_ms": {"value": [200, 600], "evidence": "high_structural"},
+    "sweep_hold_s": {"value": 1.5, "evidence": "high_structural"},
+    "top_route": {"value": {"cast": [135, 177], "return": [114, 172]}, "evidence": "high_structural"}
+  },
+  "dynamic_combo_active": false,
+  "pirate_laptop_in_scope": false
+}

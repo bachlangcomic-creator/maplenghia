@@ -1,0 +1,16 @@
+{
+  "feature": "all_cure_external_assets",
+  "reference_package_contains_assets": {"value": false, "evidence": "direct"},
+  "asset_directory": {"value": "user_data/all_cure_images", "evidence": "nghia_fallback"},
+  "required_filenames": {
+    "value": [
+      "empty.png", "npc_all_cure.png", "all_cure_line.png", "confirm_all_cure.png",
+      "buy_all_cure.png", "finish_buying.png", "shop.png", "exit.png",
+      "all_cure_pots.png", "set_sell_item.png", "confirm_set_item_to_sell.png",
+      "complete_set_item.png"
+    ],
+    "evidence": "direct"
+  },
+  "pixel_hashes": null,
+  "policy": {"value": "fail_closed_until_all_required_pngs_validate", "evidence": "nghia_fallback"}
+}
