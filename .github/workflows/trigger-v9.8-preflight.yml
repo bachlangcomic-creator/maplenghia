@@ -1,0 +1,25 @@
+name: Trigger V9.8.0 Preflight Once
+
+on:
+  push:
+    branches:
+      - release-v9.8.0-exact-detector-watchdog-recovery
+    paths:
+      - sync/v9.8-preflight-ready.txt
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch publish workflow with publish=false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run publish-v9.8.0.yml \
+            --repo bachlangcomic-creator/maplenghia \
+            --ref release-v9.8.0-exact-detector-watchdog-recovery \
+            -f publish=false
