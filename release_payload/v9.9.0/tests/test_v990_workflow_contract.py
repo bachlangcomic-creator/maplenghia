@@ -42,3 +42,12 @@ def test_only_exact_v98_superseded_nodes_are_deselected():
     assert any('test_scan_bridge_uses_v98_exact_asset_detector_helpers' in x for x in deselects)
     assert any('test_sell_delay_preserves_config_when_exact_bounds_unknown' in x for x in deselects)
     assert any('test_watchdog_owns_timer_state_without_random_uniform' in x for x in deselects)
+
+def test_preflight_junit_report_aggregates_testsuites_and_rejects_zero():
+    path=workflow_path()
+    if not path.exists():
+        path=Path(__file__).resolve().parents[1]/'.github'/'workflows'/'publish-v9.9.0.yml'
+    text=path.read_text(encoding='utf-8')
+    assert "xml.iter('testsuite')" in text
+    assert "sum(int(s.attrib.get('tests',0)) for s in suites)" in text
+    assert "if tests <= 0: raise SystemExit('JUnit report contained zero tests')" in text
