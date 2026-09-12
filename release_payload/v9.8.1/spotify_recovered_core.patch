@@ -1,0 +1,131 @@
+--- a/spotify_recovered_core.py	2026-09-12 08:07:18.798144892 +0000
++++ b/spotify_recovered_core.py	2026-09-12 08:12:15.501878667 +0000
+@@ -518,12 +518,38 @@
+         return self._spotify_input_semantic(
+             cfg, role, action_key, direction_key=direction_key, hold_ms=hold_ms, combo_hold=False)
+ 
+-    def _spotify_hold_combo_action(self, cfg, direction_key, skill_key, hold_time=0.055, role="ATTACK"):
+-        """Spotify hold-combo semantic with deterministic key-down/up ordering."""
++    def _spotify_hold_action_legacy(self, cfg, direction_key, action_key, hold_time=0.055, role="ATTACK"):
++        """Preserve V9.8 hold-one-key semantics for non-target callers."""
+         return self._spotify_input_semantic(
+-            cfg, role, skill_key, direction_key=direction_key,
++            cfg, role, action_key, direction_key=direction_key,
+             hold_ms=max(20, int(float(hold_time) * 1000.0)), combo_hold=True)
+ 
++    def _spotify_hold_combo_action(self, cfg, direction_key, flash_key, skill_key, hold_time):
++        """Recovered Spotify tap-combo: keep direction, tap Flash then Skill."""
++        skill_key = str(skill_key or "").strip()
++        flash_key = str(flash_key or "").strip() or None
++        if not skill_key:
++            self._log("[Spotify Combo] missing skill key; combat skipped")
++            return False
++
++        if direction_key:
++            self.set_move(direction_key)
++        end_time = time.monotonic() + max(0.0, float(hold_time))
++        did = False
++        try:
++            while time.monotonic() < end_time:
++                if flash_key:
++                    did = bool(self._spotify_tap_combo(
++                        cfg, direction_key, flash_key, role="TELEPORT")) or did
++                    time.sleep(random.uniform(0.015, 0.045))
++                did = bool(self._spotify_tap_combo(
++                    cfg, direction_key, skill_key, role="ATTACK")) or did
++                time.sleep(random.uniform(0.125, 0.255))
++            return did
++        except Exception:
++            self._release_all_owned_inputs()
++            raise
++
+     def _spotify_c2_tp_skill_hold_combo(self, cfg, direction_key, skill_key, hold_time):
+         """Spotify binary-matched C2 hold_combo_action micro timing.
+ 
+@@ -547,7 +573,7 @@
+             return False
+         if not flash_key or not bool(cfg.get("tele_enabled", True)):
+             return self._spotify_hold_combo_action(
+-                cfg, direction_key, skill_key, hold_time=hold_time, role="ATTACK")
++                cfg, direction_key, None, skill_key, hold_time)
+ 
+         # Binary helper's only additional local is end_time.  Keep the direction
+         # owned continuously and do not re-query window focus inside the 0.2..0.5s
+@@ -1614,17 +1640,11 @@
+         # Farm.left_and_right constants.
+         time.sleep(SPOTIFY_SIMPLE_PRE_COMBO_SLEEP)
+         combo_ms = random.randint(*SPOTIFY_SIMPLE_HOLD_COMBO_MS)
+-        map_name = str(cfg.get("current_map", "")).strip().upper()
+-        if map_name == "C2" and cfg.get("tele_key") and bool(cfg.get("tele_enabled", True)):
+-            # Spotify C2 video/runtime parity: normal farm movement includes
+-            # repeated Teleport + Skill while LEFT/RIGHT stays held.
+-            ok = self._spotify_c2_tp_skill_hold_combo(
+-                cfg, direction_key if direction_key else None, skill_key,
+-                hold_time=combo_ms / 1000.0)
+-        else:
+-            ok = self._spotify_hold_combo_action(
+-                cfg, direction_key if direction_key else None, skill_key,
+-                hold_time=combo_ms / 1000.0, role="ATTACK")
++        flash_key = (str(cfg.get("tele_key") or "").strip()
++                     if bool(cfg.get("tele_enabled", True)) else "")
++        ok = self._spotify_hold_combo_action(
++            cfg, direction_key if direction_key else None, flash_key or None,
++            skill_key, combo_ms / 1000.0)
+ 
+         stamp = time.monotonic()
+         # The original loop's hold_combo_action supplies the cadence. Do not add a
+@@ -1917,7 +1937,7 @@
+             skill_key = self._spotify_skill_key(cfg)
+             if skill_key and now >= self.spotify_bunny_next_attack:
+                 hold_ms = random.randint(*SPOTIFY_BUNNY_HOLD_MS)
+-                self._spotify_hold_combo_action(
++                self._spotify_hold_action_legacy(
+                     cfg, cfg.get("left_key", "LEFT"), skill_key,
+                     hold_time=hold_ms / 1000.0)
+                 self.spotify_bunny_next_attack = time.monotonic() + random.randint(*SPOTIFY_BUNNY_GAP_MS) / 1000.0
+@@ -2232,7 +2252,7 @@
+                     skill_key = self._spotify_skill_key(cfg)
+                     self._log("[Spotify Pirate2] Tới điểm Cast Skill")
+                     if skill_key:
+-                        self._spotify_hold_combo_action(
++                        self._spotify_hold_action_legacy(
+                             cfg, direction_key, skill_key,
+                             hold_time=random.randint(*SPOTIFY_PIRATE_TOP_CAST_HOLD_MS) / 1000.0)
+                     time.sleep(random.uniform(*SPOTIFY_PIRATE_TOP_CAST_SETTLE))
+@@ -2430,16 +2450,18 @@
+             # Existing recovered hold_combo branch remains after the direction burst.
+             if not self.spotify_pirate_sweep_combo_done:
+                 skill_key = self._spotify_skill_key(cfg)
++                flash_key = (str(cfg.get("tele_key") or "").strip()
++                             if bool(cfg.get("tele_enabled", True)) else "")
+                 if skill_key:
+                     self._spotify_hold_combo_action(
+-                        cfg, dir_key, skill_key,
+-                        hold_time=(SPOTIFY_PIRATE_1HIT_SWEEP_HOLD_SECONDS
+-                                   if one_hit else SPOTIFY_PIRATE_SWEEP_HOLD_SECONDS))
++                        cfg, dir_key, flash_key or None, skill_key,
++                        (SPOTIFY_PIRATE_1HIT_SWEEP_HOLD_SECONDS
++                         if one_hit else SPOTIFY_PIRATE_SWEEP_HOLD_SECONDS))
+                 self.spotify_pirate_sweep_combo_done = True
+                 now = time.monotonic()
+ 
+             if now >= self.spotify_pirate_next_loot_tap and cfg.get("loot_key"):
+-                self._spotify_hold_combo_action(
++                self._spotify_hold_action_legacy(
+                     cfg, dir_key, cfg.get("loot_key"),
+                     hold_time=random.randint(*SPOTIFY_PIRATE_LOOT_COMBO_MS) / 1000.0, role="LOOT")
+                 self.spotify_pirate_next_loot_tap = (
+@@ -2542,9 +2564,11 @@
+         # 200..500ms combo window. No edge-jump branch or extra controller sleep
+         # is injected into this moving-combat action.
+         if skill_key and now >= self.spotify_pirate_farm_next_attack:
++            flash_key = (str(cfg.get("tele_key") or "").strip()
++                         if bool(cfg.get("tele_enabled", True)) else "")
+             self._spotify_hold_combo_action(
+-                cfg, direction_key, skill_key,
+-                hold_time=random.randint(*SPOTIFY_PIRATE_FARM_HOLD_MS) / 1000.0)
++                cfg, direction_key, flash_key or None, skill_key,
++                random.randint(*SPOTIFY_PIRATE_FARM_HOLD_MS) / 1000.0)
+             self.spotify_pirate_farm_next_attack = time.monotonic()
+         return True
+ 
