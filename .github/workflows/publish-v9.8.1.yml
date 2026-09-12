@@ -1,0 +1,269 @@
+name: Publish Nghia Client v9.8.1 Hold Combo Parity
+
+on:
+  push:
+    branches:
+      - release-v9.8.1-hold-combo-parity
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Create public v9.8.1 release and publish latest.json'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: '9.8.1'
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout V9.8.1 release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-v9.8.1-hold-combo-parity
+          fetch-depth: 0
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download and hash-gate public V9.8.0 and V9.7.0 bases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base,portable,v97baseline,out,verify | Out-Null
+          gh release download v9.8.0 --repo $env:REPO -p NghiaClient_V9.8.0_Portable.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'v9.8.0 portable download failed' }
+          gh release download v9.7.0 --repo $env:REPO -p NghiaClient_V9.7.0_Portable.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'v9.7.0 portable download failed' }
+          @'
+          from pathlib import Path
+          import hashlib, zipfile, shutil
+          checks={
+            'base/NghiaClient_V9.8.0_Portable.zip':'12162a83986e8f9ff322a5e9735a4d8ef1989526dd85638051206a570be4caa1',
+            'base/NghiaClient_V9.7.0_Portable.zip':'09f70ba29b5a55aa84c040c195d3ab629259214f3c745105e691678d225b0086',
+          }
+          for p,want in checks.items():
+              got=hashlib.sha256(Path(p).read_bytes()).hexdigest()
+              if got != want: raise SystemExit(f'base hash mismatch {p}: {got} != {want}')
+          with zipfile.ZipFile('base/NghiaClient_V9.8.0_Portable.zip') as z: z.extractall('portable')
+          with zipfile.ZipFile('base/NghiaClient_V9.7.0_Portable.zip') as z: z.extractall('v97baseline')
+          print('V981_PUBLIC_BASE_HASHES_OK')
+          '@ | python -
+
+      - name: Snapshot protected V9.8.0 files and normalize patch target
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib, json
+          protected=[
+            'NghiaLauncher.exe',
+            'app_payload/NghiaClientApp.exe',
+            'app_payload/spotify_focus_parity.py',
+            'app_payload/spotify_miumiu_sell.py',
+            'app_payload/spotify_pc_alarm.py',
+            'app_payload/spotify_detection_parity.py',
+            'app_payload/spotify_watchdog.py',
+            'app_payload/spotify_exact_assets.py',
+            'app_payload/spotify_all_cure_market.py',
+          ]
+          root=Path('portable')
+          snap={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in protected}
+          Path('protected-before.json').write_text(json.dumps(snap,indent=2)+'\n',encoding='utf-8')
+          core=root/'app_payload/spotify_recovered_core.py'
+          raw=core.read_bytes().replace(b'\r\n',b'\n')
+          core.write_bytes(raw)
+          got=hashlib.sha256(raw).hexdigest()
+          want='eaf052e9891a018c43f8dd51fb992ea75525855859754f73112fccbf46217aed'
+          if got != want: raise SystemExit(f'normalized V9.8 core mismatch: {got} != {want}')
+          print('V981_PATCH_TARGET_OK')
+          '@ | python -
+
+      - name: Apply V9.8.1 hold-combo overlay
+        shell: pwsh
+        run: |
+          git apply --check --directory=portable/app_payload release_payload/v9.8.1/spotify_recovered_core.patch
+          if ($LASTEXITCODE -ne 0) { throw 'V9.8.1 core patch check failed' }
+          git apply --directory=portable/app_payload release_payload/v9.8.1/spotify_recovered_core.patch
+          if ($LASTEXITCODE -ne 0) { throw 'V9.8.1 core patch apply failed' }
+          New-Item -ItemType Directory -Force portable/app_payload/evidence | Out-Null
+          Copy-Item release_payload/v9.8.1/evidence/hold_combo_action.json portable/app_payload/evidence/hold_combo_action.json -Force
+          Write-Host 'V981_OVERLAY_APPLY_OK'
+
+      - name: Compile and run V9.7 V9.8 V9.8.1 regression
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m compileall -q portable/app_payload
+          $env:PYTHONPATH=(Resolve-Path portable/app_payload).Path + ';' + (Resolve-Path release_payload/v9.8.1).Path + ';' + (Resolve-Path release_payload/v9.8.0).Path + ';' + (Resolve-Path release_payload/v9.7.0).Path
+          $env:APP_PAYLOAD=(Resolve-Path portable/app_payload).Path
+          $env:V97_BASE_PAYLOAD=(Resolve-Path v97baseline/app_payload).Path
+          pytest release_payload/v9.7.0/tests release_payload/v9.8.0/tests release_payload/v9.8.1/tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'V9.8.1 regression failed' }
+          Write-Host 'V981_PYTEST_OK'
+
+      - name: Verify protected files unchanged and V9.8.1 static guards
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import ast, hashlib, json
+          root=Path('portable')
+          before=json.loads(Path('protected-before.json').read_text(encoding='utf-8'))
+          for p,want in before.items():
+              got=hashlib.sha256((root/p).read_bytes()).hexdigest()
+              if got != want: raise SystemExit(f'protected file changed {p}: {got} != {want}')
+          def fn(path,name):
+              text=Path(path).read_text(encoding='utf-8'); tree=ast.parse(text)
+              for node in ast.walk(tree):
+                  if isinstance(node,ast.FunctionDef) and node.name==name:
+                      return ast.get_source_segment(text,node) or ''
+              raise SystemExit('missing function '+name)
+          core=root/'app_payload/spotify_recovered_core.py'
+          host=root/'app_payload/maple_nghia_pro.py'
+          primary=fn(core,'_spotify_primary_skill_step')
+          onehit=fn(core,'_spotify_pirate_1hit_farm_step')
+          legacy=fn(core,'_spotify_c2_tp_skill_hold_combo')
+          fast=fn(host,'_c2_fast_farm_worker')
+          text=core.read_text(encoding='utf-8')
+          assert '_spotify_hold_combo_action' in primary and '_spotify_c2_tp_skill_hold_combo' not in primary
+          assert '_spotify_hold_combo_action' not in onehit
+          assert 'SPOTIFY_R54_COMBO_SPAM_ACTION_MS' in legacy and 'SPOTIFY_R54_COMBO_SPAM_WAIT_S' in legacy
+          assert 'SPOTIFY_SIMPLE_HOLD_COMBO_MS = (200, 500)' in text
+          assert '_spotify_cached_game_hwnd' in fast and '_find_game_window' not in fast
+          for forbidden in ('watchdog','captcha','full_bag','all_cure','market','miumiu','run_sell_thread','dynamic_combo'):
+              assert forbidden not in fast.lower(), forbidden
+          prod='\n'.join((root/'app_payload'/n).read_text(encoding='utf-8') for n in ('maple_nghia_pro.py','spotify_recovered_core.py'))
+          for forbidden in ('SpotifySessionMonitorWorker','session_monitor_worker','check_session(','session_token','google.generativeai','generativeai','solve_captcha','captcha_answer','gemini'):
+              assert forbidden.lower() not in prod.lower(), forbidden
+          print('V981_PROTECTED_HASHES_AND_STATIC_GUARDS_OK')
+          '@ | python -
+
+      - name: Real Windows default-launch smoke
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import json
+          Path('portable/version.json').write_text(json.dumps({'version':'9.8.1'},indent=2)+'\n',encoding='utf-8')
+          crash=Path('portable/user_data/launcher_crash.log')
+          if crash.exists(): crash.unlink()
+          '@ | python -
+          $root=(Resolve-Path 'portable').Path
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            $crash=Join-Path $root 'user_data/launcher_crash.log'
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3; $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V981_REAL_DEFAULT_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path (Join-Path $root 'user_data/launcher_crash.log')) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Package and validate V9.8.1 preflight files
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib,json,shutil,zipfile
+          for d in Path('portable/app_payload').rglob('__pycache__'): shutil.rmtree(d,ignore_errors=True)
+          Path('portable/version.json').write_text(json.dumps({'version':'9.8.1'},indent=2)+'\n',encoding='utf-8')
+          status={'latest_version':'9.8.1','local_version':'9.8.1','notes':'Spotify Hold Combo Parity for SIMPLE and Pirate callers.','state':'up_to_date'}
+          Path('portable/user_data/update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          shutil.rmtree('update_stage',ignore_errors=True); Path('update_stage').mkdir()
+          shutil.copytree('portable/app_payload','update_stage/app_payload')
+          required=[
+            'NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py','spotify_recovered_core.py',
+            'spotify_behavior_engine.py','spotify_focus_parity.py','spotify_miumiu_sell.py','spotify_pc_alarm.py',
+            'spotify_detection_parity.py','spotify_watchdog.py','spotify_exact_assets.py','spotify_all_cure_market.py',
+            'evidence/hold_combo_action.json','evidence/all_cure_market.json','evidence/revive_action.json',
+            'evidence/dynamic_combo_callers.json','evidence/main_farm_worker.json']
+          for rel in required:
+              if not (Path('portable/app_payload')/rel).exists(): raise SystemExit('missing required '+rel)
+          Path('update_stage/release.json').write_text(json.dumps({'payload_dir':'app_payload','required_files':required,'version':'9.8.1'},indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          def pack(root,out):
+              root=Path(root)
+              with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
+                  for p in sorted(root.rglob('*')):
+                      if p.is_file(): z.write(p,p.relative_to(root).as_posix())
+          pack('portable','out/NghiaClient_V9.8.1_Portable.zip')
+          pack('update_stage','out/NghiaEdition_Update_v9.8.1.zip')
+          def h(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          lines=[
+            'NghiaClient_V9.8.1_Portable.zip '+h('out/NghiaClient_V9.8.1_Portable.zip'),
+            'NghiaEdition_Update_v9.8.1.zip '+h('out/NghiaEdition_Update_v9.8.1.zip')]
+          Path('out/preflight_hashes.txt').write_text('\n'.join(lines)+'\n',encoding='utf-8')
+          print('\n'.join(lines))
+          '@ | python -
+
+      - name: Upload private V9.8.1 preflight artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9.8.1-preflight
+          path: |
+            out/NghiaClient_V9.8.1_Portable.zip
+            out/NghiaEdition_Update_v9.8.1.zip
+            out/preflight_hashes.txt
+          if-no-files-found: error
+
+      - name: Create public V9.8.1 release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v9.8.1 --repo $env:REPO --target release-v9.8.1-hold-combo-parity --title "Nghia Client v9.8.1 - Spotify Hold Combo Parity" --notes "Recovered shared Teleport+Skill cadence for C1/C2/B1/B3 and Pirate Den; Pirate Den 1 Hit farm semantics preserved." out/NghiaClient_V9.8.1_Portable.zip out/NghiaEdition_Update_v9.8.1.zip
+          if ($LASTEXITCODE -ne 0) { throw 'public v9.8.1 release creation failed' }
+
+      - name: Verify public V9.8.1 assets and publish latest.json LAST
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v9.8.1 --repo $env:REPO -p NghiaClient_V9.8.1_Portable.zip -p NghiaEdition_Update_v9.8.1.zip -D verify
+          if ($LASTEXITCODE -ne 0) { throw 'public v9.8.1 redownload failed' }
+          @'
+          from pathlib import Path
+          import hashlib,json,subprocess
+          def h(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          local_port=h('out/NghiaClient_V9.8.1_Portable.zip'); public_port=h('verify/NghiaClient_V9.8.1_Portable.zip')
+          local_up=h('out/NghiaEdition_Update_v9.8.1.zip'); public_up=h('verify/NghiaEdition_Update_v9.8.1.zip')
+          if local_port != public_port or local_up != public_up: raise SystemExit('public asset hash mismatch')
+          Path('latest-v981.json').write_text(json.dumps({
+            'version':'9.8.1','channel':'stable',
+            'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.1/NghiaEdition_Update_v9.8.1.zip',
+            'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.1/NghiaEdition_Update_v9.8.1.zip',
+            'sha256':public_up,'payload_dir':'app_payload','min_launcher_version':'1.0.1',
+            'notes':'Spotify Hold Combo Parity: recovered shared Teleport+Skill cadence for C1/C2/B1/B3 and Pirate Den, with Pirate Den 1 Hit farm semantics preserved.'
+          },indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print('PUBLIC_PORTABLE_SHA256',public_port)
+          print('PUBLIC_UPDATE_SHA256',public_up)
+          '@ | python -
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin main
+          git worktree add main-publish origin/main
+          Copy-Item latest-v981.json main-publish/latest.json -Force
+          Push-Location main-publish
+          git add latest.json
+          git commit -m "release: point stable updater to v9.8.1"
+          git push origin HEAD:main
+          Pop-Location
