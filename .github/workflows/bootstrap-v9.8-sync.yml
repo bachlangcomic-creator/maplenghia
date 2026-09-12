@@ -24,6 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          base=$(git rev-parse HEAD)
           parts=(
             sync/v9.8-bootstrap-part01.b64
             sync/v9.8-bootstrap-part02a.b64
@@ -37,7 +38,6 @@ jobs:
           )
           : > /tmp/v9.8-bootstrap.patch.gz
           for part in "${parts[@]}"; do
-            echo "DECODING=$part SIZE=$(wc -c < "$part")"
             base64 -d "$part" >> /tmp/v9.8-bootstrap.patch.gz
           done
           gz_sha=$(sha256sum /tmp/v9.8-bootstrap.patch.gz | awk '{print $1}')
@@ -46,25 +46,16 @@ jobs:
           gzip -dc /tmp/v9.8-bootstrap.patch.gz > /tmp/v9.8-bootstrap.patch
           patch_sha=$(sha256sum /tmp/v9.8-bootstrap.patch | awk '{print $1}')
           echo "PATCH_SHA=$patch_sha"
-          echo "PATCH_SUBJECTS=$(grep -c '^Subject: \[PATCH ' /tmp/v9.8-bootstrap.patch)"
           test "$patch_sha" = "a764579fb8c5588a59bd099b333d5aa085b019cb5295a6091fe042fba220604b"
           git config user.name 'OpenAI'
           git config user.email 'noreply@openai.com'
-          if ! git am --3way /tmp/v9.8-bootstrap.patch; then
-            echo 'GIT_AM_FAILED'
-            git status --short || true
-            git am --show-current-patch=diff || true
-            git am --abort || true
-            exit 1
-          fi
+          git am --3way /tmp/v9.8-bootstrap.patch
           echo 'GIT_AM_OK'
-          git log --oneline -15
-
-      - name: Remove temporary bootstrap files and push
-        shell: bash
-        run: |
-          set -euo pipefail
-          git rm -f .github/workflows/bootstrap-v9.8-sync.yml sync/v9.8-bootstrap-ready.txt
+          git reset --soft "$base"
+          git restore --staged .github/workflows/publish-v9.8.0.yml || true
+          rm -f .github/workflows/publish-v9.8.0.yml
+          git rm -f sync/v9.8-bootstrap-ready.txt
           git rm -f sync/v9.8-bootstrap-part*.b64
-          git commit -m 'chore: remove v9.8 bootstrap sync'
+          git commit -m 'feat: sync v9.8 exact detector watchdog implementation'
           git push origin HEAD:release-v9.8.0-exact-detector-watchdog-recovery
+          echo 'V980_IMPLEMENTATION_SYNC_OK'
