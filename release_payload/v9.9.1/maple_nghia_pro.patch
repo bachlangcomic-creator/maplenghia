@@ -1,0 +1,103 @@
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -59,6 +59,7 @@
+ from spotify_exact_assets import decode_exact_asset
+ from spotify_watchdog import SpotifyWatchdogWorker
+ from spotify_all_cure_market import SpotifyAllCureMarketWorker
++from spotify_all_cure_assets import SpotifyAllCureAssetGateway
+ from spotify_all_cure_executor import SpotifyAllCureExecutor
+ from spotify_main_farm_orchestrator import SpotifyMainFarmOrchestrator, CONTINUE, STOP_TICK
+ 
+@@ -478,8 +479,10 @@
+         self.spotify_force_focus_parity = tk.BooleanVar(value=True)
+         # V9.7: dedicated watchdog topology. Detection semantics remain evidence-labeled.
+         self.spotify_watchdog_parity_enabled = tk.BooleanVar(value=True)
+-        # Spotify F3/F7 All Cure market subsystem. Opt-in and fail-closed when reference images are unavailable.
++        # Spotify F3/F7 All Cure market subsystem. The recovered workflow is complete;
++        # execution becomes READY only when all 12 external templates validate.
+         self.spotify_all_cure_market_enabled = tk.BooleanVar(value=False)
++        self.spotify_all_cure_status = tk.StringVar(value="ALL CURE: MISSING — chưa nạp đủ 12 ảnh")
+         # Nghĩa extension: C2 may learn its minimap lane Y from stable runtime samples.
+         # ON by default for stability; turn OFF for fixed-Y Spotify parity.
+         self.c2_adaptive_y_enabled = tk.BooleanVar(value=True)
+@@ -947,6 +950,43 @@
+             style="PanelMuted.TLabel", wraplength=780, justify="left",
+         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+ 
++    def _refresh_all_cure_status(self):
++        try:
++            state, detail = self.spotify_all_cure_market.readiness_status()
++            self.spotify_all_cure_status.set(f"ALL CURE: {state} — {detail}")
++            return state
++        except Exception as exc:
++            self.spotify_all_cure_status.set(f"ALL CURE: INVALID — {exc}")
++            return "INVALID"
++
++    def _import_all_cure_templates(self):
++        folder = filedialog.askdirectory(title="Chọn thư mục chứa đúng 12 ảnh All Cure")
++        if not folder:
++            return
++        source = Path(folder)
++        nested = source / "all_cure_images"
++        try:
++            direct_status = SpotifyAllCureAssetGateway(source).validate()
++            if not direct_status.ready and nested.is_dir():
++                source = nested
++            result = self.spotify_all_cure_market.gateway.import_from_directory(source)
++        except Exception as exc:
++            self._refresh_all_cure_status()
++            messagebox.showerror("All Cure", f"Không thể nạp template: {exc}")
++            return
++
++        state = self._refresh_all_cure_status()
++        if result.ready and state == "READY":
++            self._log("[Spotify All Cure] 12/12 templates imported; gateway READY.")
++            messagebox.showinfo("All Cure", "Đã nạp đủ 12 ảnh. All Cure gateway: READY.")
++            return
++        parts = []
++        if result.missing:
++            parts.append("Thiếu: " + ", ".join(result.missing))
++        if result.invalid:
++            parts.append("Ảnh lỗi: " + ", ".join(result.invalid))
++        messagebox.showwarning("All Cure", "Không thay đổi bộ ảnh hiện tại.\n" + ("\n".join(parts) or "Bộ template chưa hợp lệ."))
++
+     def build_sell_page_pro(self):
+         c = self.COLORS
+         page = self._make_page("sell")
+@@ -982,6 +1022,36 @@
+             f, text="CHẠY BÁN MIUMIU NGAY", style="Accent.TButton", command=self.run_sell_now
+         ).grid(row=3, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+ 
++        o2, allcure = self._card(
++            page, "All Cure Market (F3/F7)",
++            "Spotify recovered workflow: nạp đủ 12 template PNG để mở gateway; ảnh lỗi/thiếu sẽ không chạy click."
++        )
++        o2.pack(fill="x", pady=(12, 0))
++        af = tk.Frame(allcure, bg=c["panel"])
++        af.pack(fill="x", padx=14, pady=(2, 14))
++        ttk.Checkbutton(
++            af, text="Bật Auto All Cure Market (F7)",
++            variable=self.spotify_all_cure_market_enabled, style="Panel.TCheckbutton"
++        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=5)
++        ttk.Label(
++            af, textvariable=self.spotify_all_cure_status,
++            style="PanelMuted.TLabel", wraplength=760, justify="left"
++        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 8))
++        ttk.Button(
++            af, text="NẠP 12 ẢNH ALL CURE", style="Accent.TButton",
++            command=self._import_all_cure_templates
++        ).grid(row=2, column=0, sticky="ew", pady=(4, 0))
++        ttk.Button(
++            af, text="KIỂM TRA TRẠNG THÁI", style="Pro.TButton",
++            command=self._refresh_all_cure_status
++        ).grid(row=2, column=1, sticky="ew", padx=(8, 0), pady=(4, 0))
++        ttk.Label(
++            af,
++            text="Tên file bắt buộc: empty, npc_all_cure, all_cure_line, confirm_all_cure, buy_all_cure, finish_buying, shop, exit, all_cure_pots, set_sell_item, confirm_set_item_to_sell, complete_set_item (.png).",
++            style="PanelMuted.TLabel", wraplength=760, justify="left"
++        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
++        self._refresh_all_cure_status()
++
+     def build_vision_page(self):
+         c = self.COLORS
+         page = self._make_page("vision")
