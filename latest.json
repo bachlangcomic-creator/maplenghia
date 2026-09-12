@@ -1,10 +1,10 @@
 {
-  "version": "9.8.1",
+  "version": "9.9.1",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.1/NghiaEdition_Update_v9.8.1.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.8.1/NghiaEdition_Update_v9.8.1.zip",
-  "sha256": "189e3b30c3c83c1da2efa5dde748ba9a9d6d7f0804e72db6beb71941816ae5a1",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.1/NghiaEdition_Update_v9.9.1.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.1/NghiaEdition_Update_v9.9.1.zip",
+  "sha256": "51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "Spotify Hold Combo Parity: recovered shared Teleport+Skill cadence for C1/C2/B1/B3 and Pirate Den, with Pirate Den 1 Hit farm semantics preserved."
+  "notes": "V9.9.1 All Cure Recovery + V9.9 forensic parity. All Cure workflow evidence is recovered; runtime requires the 12 external PNG templates to be imported before READY."
 }
