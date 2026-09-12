@@ -25,15 +25,30 @@ jobs:
         run: |
           set -euo pipefail
           : > /tmp/v9.8-bootstrap.patch.gz
+          echo "PARTS=$(find sync -maxdepth 1 -type f -name 'v9.8-bootstrap-part*.b64' | sort | tr '\n' ' ')"
           for part in $(find sync -maxdepth 1 -type f -name 'v9.8-bootstrap-part*.b64' | sort); do
+            echo "DECODING=$part SIZE=$(wc -c < \"$part\")"
             base64 -d "$part" >> /tmp/v9.8-bootstrap.patch.gz
           done
-          test "$(sha256sum /tmp/v9.8-bootstrap.patch.gz | awk '{print $1}')" = "26546941142400e6345c26146d0abb0f6adf31473324ca2b20f122baa545b1ab"
+          gz_sha=$(sha256sum /tmp/v9.8-bootstrap.patch.gz | awk '{print $1}')
+          echo "GZ_SHA=$gz_sha"
+          test "$gz_sha" = "26546941142400e6345c26146d0abb0f6adf31473324ca2b20f122baa545b1ab"
           gzip -dc /tmp/v9.8-bootstrap.patch.gz > /tmp/v9.8-bootstrap.patch
-          test "$(sha256sum /tmp/v9.8-bootstrap.patch | awk '{print $1}')" = "a764579fb8c5588a59bd099b333d5aa085b019cb5295a6091fe042fba220604b"
+          patch_sha=$(sha256sum /tmp/v9.8-bootstrap.patch | awk '{print $1}')
+          echo "PATCH_SHA=$patch_sha"
+          echo "PATCH_SUBJECTS=$(grep -c '^Subject: \[PATCH ' /tmp/v9.8-bootstrap.patch)"
+          test "$patch_sha" = "a764579fb8c5588a59bd099b333d5aa085b019cb5295a6091fe042fba220604b"
           git config user.name 'OpenAI'
           git config user.email 'noreply@openai.com'
-          git am --3way /tmp/v9.8-bootstrap.patch
+          if ! git am --3way /tmp/v9.8-bootstrap.patch; then
+            echo 'GIT_AM_FAILED'
+            git status --short || true
+            git am --show-current-patch=diff || true
+            git am --abort || true
+            exit 1
+          fi
+          echo 'GIT_AM_OK'
+          git log --oneline -15
 
       - name: Remove temporary bootstrap files and push
         shell: bash
