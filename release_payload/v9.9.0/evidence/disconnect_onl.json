@@ -1,0 +1,29 @@
+{
+  "feature": "disconnect_onl",
+  "asset": {
+    "name": "ONL_B64",
+    "evidence": "direct",
+    "sha256": "5f364d6314d83931bb5723f7b851d4245931b98b7926892862b5e0d052108303"
+  },
+  "threshold": {
+    "value": 0.95,
+    "evidence": "direct"
+  },
+  "scan_owner": {
+    "value": "watchdog",
+    "evidence": "high_structural"
+  },
+  "frame_path": {
+    "value": "watchdog captured frame; no dedicated ROI recovered",
+    "evidence": "high_structural"
+  },
+  "reaction": {
+    "value": [
+      "release_inputs",
+      "pause",
+      "local_alert",
+      "telegram_if_configured"
+    ],
+    "evidence": "high_structural"
+  }
+}
