@@ -24,10 +24,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          parts=(
+            sync/v9.8-bootstrap-part01.b64
+            sync/v9.8-bootstrap-part02a.b64
+            sync/v9.8-bootstrap-part02b.b64
+            sync/v9.8-bootstrap-part02c.b64
+            sync/v9.8-bootstrap-part03.b64
+            sync/v9.8-bootstrap-part04a.b64
+            sync/v9.8-bootstrap-part04b.b64
+            sync/v9.8-bootstrap-part04c.b64
+            sync/v9.8-bootstrap-part05.b64
+          )
           : > /tmp/v9.8-bootstrap.patch.gz
-          echo "PARTS=$(find sync -maxdepth 1 -type f -name 'v9.8-bootstrap-part*.b64' | sort | tr '\n' ' ')"
-          for part in $(find sync -maxdepth 1 -type f -name 'v9.8-bootstrap-part*.b64' | sort); do
-            echo "DECODING=$part SIZE=$(wc -c < \"$part\")"
+          for part in "${parts[@]}"; do
+            echo "DECODING=$part SIZE=$(wc -c < "$part")"
             base64 -d "$part" >> /tmp/v9.8-bootstrap.patch.gz
           done
           gz_sha=$(sha256sum /tmp/v9.8-bootstrap.patch.gz | awk '{print $1}')
