@@ -1,0 +1,75 @@
+diff --git a/maple_nghia_pro.py b/maple_nghia_pro.py
+index a902ea2..426d2cf 100644
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -50,6 +50,7 @@ from spotify_detection_parity import (
+     SpotifyDetectionResult,
+     SOURCE_NGHIA_FALLBACK,
+     detect_captcha_exact,
++    detect_disconnect_recovered,
+     score_dead,
+     score_disconnect,
+     score_full_bag_variant,
+@@ -346,6 +347,7 @@ class MapleNghiaPro(MapleVisionClient):
+         self.spotify_sell_arrived_since = 0.0
+         self.spotify_full_bag_event.clear()
+         self.spotify_sell_timer_event.clear()
++        self.spotify_disconnect_latched = False
+         self.behavior_engine.core._spotify_reset_safe_place_state()
+         self.cached_dead = None
+         self.cached_dc = None
+@@ -1266,6 +1268,7 @@ class MapleNghiaPro(MapleVisionClient):
+         self.spotify_pirate_onehit_wait_until = 0.0
+         self.spotify_pirate_onehit_attacked = False
+         self.spotify_sell_arrived_since = 0.0
++        self.spotify_disconnect_latched = False
+         if self._is_spotify_profile(cfg):
+             p = cfg.get("map_profile") or {}
+             self._log(f"Spotify farm parity: {cfg.get('current_map')} | mode={self._spotify_profile_kind(cfg)} | X {p.get('LEFT_X')}→{p.get('RIGHT_X')} | Safe ({p.get('SAFE_PLACE_X')},{p.get('SAFE_PLACE_Y')})")
+@@ -2785,10 +2788,9 @@ class MapleNghiaPro(MapleVisionClient):
+                 path_is_exact=True,
+             )
+             self.spotify_dead_center = dead_center if dead.matched else None
+-            disconnect = score_disconnect(
+-                self._spotify_watchdog_exact_template_score(frame, "ONL_B64"),
+-                threshold=alert_threshold,
+-                path_is_exact=False,
++            disconnect = detect_disconnect_recovered(
++                frame,
++                lambda image, _raw: self._spotify_watchdog_exact_template_score(image, "ONL_B64"),
+             )
+             full_variants = [
+                 score_full_bag_variant(
+@@ -2864,7 +2866,22 @@ class MapleNghiaPro(MapleVisionClient):
+         self.spotify_sell_timer_event.set()
+         self._log("[Spotify Watchdog] sell timer due")
+ 
++    def _spotify_disconnect_reaction(self, result, cfg):
++        if not result.matched:
++            self.spotify_disconnect_latched = False
++            return False
++        if self.spotify_disconnect_latched:
++            return False
++        self.spotify_disconnect_latched = True
++        self._spotify_watchdog_request_pause("disconnect", cfg)
++        if cfg.get("alert_dc"):
++            self._handle_alert("dc", "Phát hiện mất kết nối / hộp thoại kết nối.", cfg)
++        return True
++
+     def _spotify_watchdog_emit(self, result: SpotifyDetectionResult, cfg):
++        if result.kind in ("dc", "disconnect"):
++            self._spotify_disconnect_reaction(result, cfg)
++            return
+         if not result.matched:
+             return
+         if result.kind == "captcha":
+@@ -2875,10 +2892,6 @@ class MapleNghiaPro(MapleVisionClient):
+             revived = self._spotify_watchdog_request_revive(result, cfg)
+             if not revived and cfg.get("alert_dead"):
+                 self._handle_alert("dead", "Phát hiện trạng thái nhân vật chết.", cfg)
+-        elif result.kind in ("dc", "disconnect"):
+-            self._spotify_watchdog_request_pause("disconnect", cfg)
+-            if cfg.get("alert_dc"):
+-                self._handle_alert("dc", "Phát hiện mất kết nối / hộp thoại kết nối.", cfg)
+         elif result.kind == "full_bag":
+             self.spotify_full_bag_event.set()
