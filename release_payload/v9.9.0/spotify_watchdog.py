@@ -89,7 +89,7 @@ class SpotifyWatchdogWorker:
                     frame = self.host._spotify_watchdog_capture_frame(cfg, hwnd)
                     if frame is not None:
                         for result in self.host._spotify_watchdog_scan_frame(frame, cfg):
-                            if result.matched:
+                            if result.matched or result.kind in ("dc", "disconnect"):
                                 self.host._spotify_watchdog_emit(result, cfg)
                 self._sell_schedule_step(cfg)
             except Exception as exc:
