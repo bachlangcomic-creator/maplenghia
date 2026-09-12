@@ -15,7 +15,7 @@ def fn(name):
 
 
 def test_safe_place_ready_dispatches_without_marking_sell_complete():
-    src = fn("bot_loop")
+    src = fn("_spotify_mainfarm_sell_safe_stage")
     start = src.index('if safe_outcome == "READY":')
     end = src.index('elif safe_outcome == "FAILED":', start)
     ready = src[start:end]
