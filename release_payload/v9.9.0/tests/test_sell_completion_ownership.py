@@ -35,7 +35,10 @@ def test_worker_uses_real_miumiu_ok_as_completion_signal():
     src = fn("_sell_sequence_worker")
     assert "ok = self.miumiu_seller.run" in src
     success = src[src.index("if ok:") :]
-    assert "spotify_watchdog.notify_sell_completed" in success
+    assert "completed_at = time.monotonic()" in success
+    assert "self.last_sell_time = completed_at" in success
+    assert "self.last_timer_sell = completed_at" in success
+    assert "spotify_watchdog.notify_sell_completed(completed_at)" in success
     assert success.index("if ok:") < success.index("spotify_watchdog.notify_sell_completed")
     assert "spotify_sell_timer_event.clear()" in success
     assert "spotify_sell_inflight = False" in success
