@@ -26,7 +26,28 @@ class SpotifyAllCureMarketWorker:
     def _load_evidence(self):
         try:
             data = json.loads(self.evidence_path.read_text(encoding='utf-8'))
-            return data if isinstance(data, dict) else {}
+            if not isinstance(data, dict):
+                return {}
+            # Read-only V9.8 compatibility view. V9.9 gating still uses the explicit
+            # workflow_evidence_ready flag + validated external assets; these legacy
+            # fields never make a transaction executable.
+            out = dict(data)
+            coords = data.get('coordinates') or {}
+            out['coordinates'] = {
+                name: (record.get('value') if isinstance(record, dict) and 'value' in record else record)
+                for name, record in coords.items()
+            }
+            quantity = data.get('quantity') or {}
+            out['buy'] = {
+                'quantity': quantity.get('value', 100) if isinstance(quantity, dict) else quantity,
+                'complete': False,
+            }
+            out['sell'] = {'complete': False}
+            out['hotkeys'] = {
+                'F3': 'run sell_all_cure_loop (recovered reference)',
+                'F7': 'toggle continuous all_cure loop (recovered reference)',
+            }
+            return out
         except (OSError, ValueError, TypeError):
             return {}
 

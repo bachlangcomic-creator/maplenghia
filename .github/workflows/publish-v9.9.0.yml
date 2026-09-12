@@ -19,6 +19,8 @@ permissions:
 env:
   REPO: bachlangcomic-creator/maplenghia
   VERSION: '9.9.0'
+  V981_PORTABLE_SHA: e36350ab7e8285f3e7f0c4d1cc80aee9c88d4c5927249bb11dcc40b989694d46
+  V97_PORTABLE_SHA: 09f70ba29b5a55aa84c040c195d3ab629259214f3c745105e691678d225b0086
 
 jobs:
   preflight-windows:
@@ -50,8 +52,8 @@ jobs:
           from pathlib import Path
           import hashlib, zipfile
           checks={
-            'base/NghiaClient_V9.8.1_Portable.zip':'e36350ab7e8285f3e7f0c4d1cc80aee9c88d4c5927249bb11dcc40b989694d46',
-            'base/NghiaClient_V9.7.0_Portable.zip':'09f70ba29b5a55aa84c040c195d3ab629259214f3c745105e691678d225b0086',
+            'base/NghiaClient_V9.8.1_Portable.zip': 'e36350ab7e8285f3e7f0c4d1cc80aee9c88d4c5927249bb11dcc40b989694d46',
+            'base/NghiaClient_V9.7.0_Portable.zip': '09f70ba29b5a55aa84c040c195d3ab629259214f3c745105e691678d225b0086',
           }
           for p,want in checks.items():
               got=hashlib.sha256(Path(p).read_bytes()).hexdigest()
@@ -81,7 +83,13 @@ jobs:
           $env:APP_PAYLOAD=(Resolve-Path portable/app_payload).Path
           $env:V990_EVIDENCE=(Resolve-Path release_payload/v9.9.0/evidence).Path
           $env:V97_BASE_PAYLOAD=(Resolve-Path v97baseline/app_payload).Path
-          pytest release_payload/v9.7.0/tests release_payload/v9.8.0/tests release_payload/v9.8.1/tests release_payload/v9.9.0/tests -v --junitxml=v990-junit.xml
+          # V9.9 intentionally supersedes exactly three V9.8 implementation-detail assertions:
+          # fixed/no-random sell timing and the pre-0.95 disconnect helper name.
+          # All other V9.8 tests remain active.
+          pytest release_payload/v9.7.0/tests release_payload/v9.8.0/tests release_payload/v9.8.1/tests release_payload/v9.9.0/tests -v --junitxml=v990-junit.xml `
+            --deselect=release_payload/v9.8.0/tests/test_watchdog_host_v2.py::test_scan_bridge_uses_v98_exact_asset_detector_helpers `
+            --deselect=release_payload/v9.8.0/tests/test_watchdog_sell_schedule.py::test_sell_delay_preserves_config_when_exact_bounds_unknown `
+            --deselect=release_payload/v9.8.0/tests/test_watchdog_sell_schedule.py::test_watchdog_owns_timer_state_without_random_uniform
           if ($LASTEXITCODE -ne 0) { throw 'V9.9 regression failed' }
 
       - name: Rebuild V9.9 application executable with Nuitka
@@ -125,7 +133,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Nuitka app build failed' }
             if (!(Test-Path dist_nuitka/NghiaClientApp.exe)) { throw 'NghiaClientApp.exe missing after build' }
             Copy-Item dist_nuitka/NghiaClientApp.exe NghiaClientApp.exe -Force
-          } finally { Pop-Location }
+          }
+          finally { Pop-Location }
           Write-Host 'V990_NUITKA_APP_BUILD_OK'
 
       - name: Real Windows launcher smoke with rebuilt app
@@ -162,26 +171,42 @@ jobs:
           @'
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
-          import hashlib,json,shutil,xml.etree.ElementTree as ET
-          root=Path('portable'); shutil.rmtree(root/'app_payload'/'dist_nuitka',ignore_errors=True)
+          import hashlib, json, shutil, xml.etree.ElementTree as ET
+          root=Path('portable')
+          shutil.rmtree(root/'app_payload'/'dist_nuitka',ignore_errors=True)
           for d in list((root/'app_payload').rglob('__pycache__')): shutil.rmtree(d,ignore_errors=True)
           (root/'version.json').write_text(json.dumps({'version':'9.9.0'},indent=2)+'\n',encoding='utf-8')
           status={'latest_version':'9.9.0','local_version':'9.9.0','notes':'V9.9.0 forensic parity private preflight','state':'up_to_date'}
-          (root/'user_data').mkdir(exist_ok=True); (root/'user_data'/'update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-          if (root/'user_data'/'all_cure_images').exists(): raise SystemExit('portable must not inject user_data/all_cure_images')
-          required=['NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py','spotify_recovered_core.py','spotify_behavior_engine.py','spotify_focus_parity.py','spotify_miumiu_sell.py','spotify_pc_alarm.py','spotify_detection_parity.py','spotify_watchdog.py','spotify_exact_assets.py','spotify_all_cure_assets.py','spotify_all_cure_executor.py','spotify_all_cure_market.py','spotify_main_farm_orchestrator.py','evidence/disconnect_onl.json','evidence/sell_schedule.json','evidence/main_farm_worker.json','evidence/pirate_microtiming.json','evidence/all_cure_assets.json','evidence/all_cure_market.json']
+          (root/'user_data').mkdir(exist_ok=True)
+          (root/'user_data'/'update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          if (root/'user_data'/'all_cure_images').exists():
+              raise SystemExit('portable must not inject user_data/all_cure_images')
+          required=[
+            'NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py','spotify_recovered_core.py',
+            'spotify_behavior_engine.py','spotify_focus_parity.py','spotify_miumiu_sell.py','spotify_pc_alarm.py',
+            'spotify_detection_parity.py','spotify_watchdog.py','spotify_exact_assets.py','spotify_all_cure_assets.py',
+            'spotify_all_cure_executor.py','spotify_all_cure_market.py','spotify_main_farm_orchestrator.py',
+            'evidence/disconnect_onl.json','evidence/sell_schedule.json','evidence/main_farm_worker.json',
+            'evidence/pirate_microtiming.json','evidence/all_cure_assets.json','evidence/all_cure_market.json'
+          ]
           for rel in required:
               if not (root/'app_payload'/rel).exists(): raise SystemExit('missing required '+rel)
-          out=Path('out'); out.mkdir(exist_ok=True); stage=Path('update_stage'); shutil.rmtree(stage,ignore_errors=True); (stage/'app_payload').mkdir(parents=True); shutil.copytree(root/'app_payload',stage/'app_payload',dirs_exist_ok=True)
-          release={'payload_dir':'app_payload','required_files':required,'version':'9.9.0'}; (stage/'release.json').write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          out=Path('out'); out.mkdir(exist_ok=True)
+          stage=Path('update_stage'); shutil.rmtree(stage,ignore_errors=True); (stage/'app_payload').mkdir(parents=True)
+          shutil.copytree(root/'app_payload',stage/'app_payload',dirs_exist_ok=True)
+          release={'payload_dir':'app_payload','required_files':required,'version':'9.9.0'}
+          (stage/'release.json').write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
           def pack(src,dst):
               src=Path(src)
               with ZipFile(dst,'w',ZIP_DEFLATED,compresslevel=9) as z:
                   for p in sorted(src.rglob('*')):
                       if p.is_file(): z.write(p,p.relative_to(src).as_posix())
-          portable_zip=out/'NghiaClient_V9.9.0_Portable.zip'; update_zip=out/'NghiaEdition_Update_v9.9.0.zip'; pack(root,portable_zip); pack(stage,update_zip)
+          portable_zip=out/'NghiaClient_V9.9.0_Portable.zip'
+          update_zip=out/'NghiaEdition_Update_v9.9.0.zip'
+          pack(root,portable_zip); pack(stage,update_zip)
           def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
-          ph,uh=sha(portable_zip),sha(update_zip); (out/'preflight_hashes.txt').write_text(f'NghiaClient_V9.9.0_Portable.zip {ph}\nNghiaEdition_Update_v9.9.0.zip {uh}\n',encoding='utf-8')
+          ph,uh=sha(portable_zip),sha(update_zip)
+          (out/'preflight_hashes.txt').write_text(f'NghiaClient_V9.9.0_Portable.zip {ph}\nNghiaEdition_Update_v9.9.0.zip {uh}\n',encoding='utf-8')
           with ZipFile(update_zip) as z:
               names=set(z.namelist())
               if any(n.startswith('user_data/') for n in names): raise SystemExit('Update ZIP contains user_data')
@@ -190,10 +215,15 @@ jobs:
               if got != release: raise SystemExit('release.json mismatch')
               for rel in required:
                   if 'app_payload/'+rel not in names: raise SystemExit('Update ZIP missing '+rel)
-          xml=ET.parse('v990-junit.xml').getroot(); tests=int(xml.attrib.get('tests',0)); failures=int(xml.attrib.get('failures',0)); errors=int(xml.attrib.get('errors',0)); skipped=int(xml.attrib.get('skipped',0))
+          xml=ET.parse('v990-junit.xml').getroot()
+          tests=int(xml.attrib.get('tests',0)); failures=int(xml.attrib.get('failures',0)); errors=int(xml.attrib.get('errors',0)); skipped=int(xml.attrib.get('skipped',0))
           evidence=json.loads(Path('release_payload/v9.9.0/evidence/all_cure_market.json').read_text(encoding='utf-8'))
-          report={'version':'9.9.0','tests':tests,'failures':failures,'errors':errors,'skipped':skipped,'portable_sha256':ph,'update_sha256':uh,'all_cure_workflow_evidence_ready':bool(evidence.get('workflow_evidence_ready')),'public_publish_performed':False}
-          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8'); print(json.dumps(report,indent=2))
+          report={'version':'9.9.0','tests':tests,'failures':failures,'errors':errors,'skipped':skipped,
+                  'portable_sha256':ph,'update_sha256':uh,
+                  'all_cure_workflow_evidence_ready':bool(evidence.get('workflow_evidence_ready')),
+                  'public_publish_performed':False}
+          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(report,indent=2))
           '@ | python -
 
       - name: Upload private V9.9 preflight artifact

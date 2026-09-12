@@ -1,0 +1,233 @@
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -60,6 +60,7 @@
+ from spotify_watchdog import SpotifyWatchdogWorker
+ from spotify_all_cure_market import SpotifyAllCureMarketWorker
+ from spotify_all_cure_executor import SpotifyAllCureExecutor
++from spotify_main_farm_orchestrator import SpotifyMainFarmOrchestrator, CONTINUE, STOP_TICK
+ 
+ from maple_engine_v2 import (
+     MapleVisionClient,
+@@ -245,6 +246,7 @@
+         self.miumiu_seller = SpotifyMiuMiuSeller(self)
+         self.spotify_watchdog = SpotifyWatchdogWorker(self)
+         self.spotify_all_cure_market = SpotifyAllCureMarketWorker(self)
++        self.spotify_main_farm_orchestrator = SpotifyMainFarmOrchestrator(self)
+         self.spotify_full_bag_event = threading.Event()
+         self.spotify_sell_timer_event = threading.Event()
+         self.spotify_sell_inflight = False
+@@ -2723,7 +2725,10 @@
+                 self._log(f"[-] Auto Sell MiuMiu lỗi: {exc}")
+                 return
+             if ok:
+-                self.spotify_watchdog.notify_sell_completed(time.monotonic())
++                completed_at = time.monotonic()
++                self.last_sell_time = completed_at
++                self.last_timer_sell = completed_at
++                self.spotify_watchdog.notify_sell_completed(completed_at)
+                 self.spotify_sell_timer_event.clear()
+                 self.spotify_sell_inflight = False
+                 self._log("[Auto Sell] MiuMiu parity hoàn tất.")
+@@ -2988,6 +2993,135 @@
+         elif result.kind == "full_bag":
+             self.spotify_full_bag_event.set()
+ 
++    def _spotify_mainfarm_state_stage(self, cfg, map_pos, now):
++        c2_fast_owned = self._c2_fast_worker_owns(cfg)
++        if cfg.get("preview_only"):
++            if c2_fast_owned:
++                self.c2_fast_supervisor_pause = True
++                self.behavior_engine.release_inputs()
++            else:
++                self.release_move()
++            return STOP_TICK
++        if self.sell_lock.locked():
++            if c2_fast_owned:
++                self.c2_fast_supervisor_pause = True
++                self.behavior_engine.release_inputs()
++            else:
++                self.release_move()
++            return STOP_TICK
++
++        engine = self.behavior_engine
++        kind = engine.profile_kind(cfg)
++        engine.last_kind = kind
++        engine.last_map_position = map_pos
++        engine.tick_count += 1
++        if kind == "NONE":
++            engine.release_inputs()
++            engine._transition_state("NONE", now)
++            engine.last_tick_at = now
++            return STOP_TICK
++        if kind != engine.last_profile_kind:
++            engine._on_profile_change(cfg, kind, now)
++        engine._housekeeping(cfg, now)
++        if not engine._focus_guard(cfg, now):
++            engine._transition_state("PAUSED_FOCUS", now)
++            engine.last_tick_at = now
++            return STOP_TICK
++        return CONTINUE
++
++    def _spotify_mainfarm_sell_safe_stage(self, cfg, map_pos, now):
++        condition_due = (not cfg.get("sell_only_when_full")) or self.spotify_full_bag_event.is_set()
++        cooldown_ok = (now - self.last_sell_time) * 1000 >= cfg["sell_cooldown"]
++        sell_requested = bool(
++            cfg.get("auto_sell") and cooldown_ok and
++            (self.spotify_sell_timer_event.is_set() or condition_due)
++        )
++        if not sell_requested:
++            return CONTINUE
++
++        c2_fast_owned = self._c2_fast_worker_owns(cfg)
++        if c2_fast_owned:
++            self.c2_fast_supervisor_pause = True
++        if getattr(self, "spotify_r54_safe_state", "MOVE_SAFE") == "SAFE_FAIL":
++            self.behavior_engine.core._spotify_reset_safe_place_state()
++        p = cfg.get("map_profile") or {}
++        has_safe = p.get("SAFE_PLACE_X") is not None and p.get("SAFE_PLACE_Y") is not None
++        safe_outcome = self.behavior_engine.safe_place_step(cfg, map_pos, now) if has_safe else "FAILED"
++        if safe_outcome == "READY":
++            self.spotify_full_bag_event.clear()
++            if not self.spotify_sell_inflight:
++                self.spotify_sell_timer_event.clear()
++                self.spotify_sell_inflight = True
++                self.run_sell_thread(cfg)
++            self.behavior_engine.core._spotify_reset_safe_place_state()
++        elif safe_outcome == "FAILED":
++            self.spotify_full_bag_event.clear()
++            self.spotify_sell_timer_event.clear()
++            self.last_sell_time = now
++            self.behavior_engine.release_inputs()
++            self._log("[Spotify Safe] Xác minh SAFE_PLACE thất bại; hủy lượt bán.")
++        return STOP_TICK
++
++    def _spotify_mainfarm_pet_stage(self, cfg, map_pos, now):
++        if self._c2_fast_worker_owns(cfg):
++            return CONTINUE
++        with self.behavior_engine.input_lock:
++            if self.behavior_engine.pet_step(cfg, now):
++                return STOP_TICK
++        return CONTINUE
++
++    def _spotify_mainfarm_recovery_stage(self, cfg, map_pos, now):
++        if self._c2_fast_worker_owns(cfg):
++            return CONTINUE
++        with self.behavior_engine.input_lock:
++            if self.behavior_engine.core._spotify_recovery_layer_step(cfg, map_pos, now):
++                return STOP_TICK
++        return CONTINUE
++
++    def _spotify_mainfarm_buff_stage(self, cfg, now, number):
++        if self._c2_fast_worker_owns(cfg) or not self.behavior_engine._aux_allowed(cfg, now):
++            return CONTINUE
++        isolated = dict(cfg)
++        other = 2 if int(number) == 1 else 1
++        isolated[f"buff_{other}_enabled"] = False
++        isolated[f"buff{other}_enabled"] = False
++        isolated["spotify_loot_enabled"] = False
++        isolated["auto_loot"] = False
++        with self.behavior_engine.input_lock:
++            acted = bool(self.behavior_engine.core._spotify_auxiliary_step(isolated, now))
++        if acted:
++            self.behavior_engine.last_aux_tick_at = now
++            return STOP_TICK
++        return CONTINUE
++
++    def _spotify_mainfarm_buff1_stage(self, cfg, map_pos, now):
++        isolated = dict(cfg)
++        isolated["buff_2_enabled"] = False
++        isolated["buff2_enabled"] = False
++        return self._spotify_mainfarm_buff_stage(isolated, now, 1)
++
++    def _spotify_mainfarm_buff2_stage(self, cfg, map_pos, now):
++        isolated = dict(cfg)
++        isolated["buff_1_enabled"] = False
++        isolated["buff1_enabled"] = False
++        return self._spotify_mainfarm_buff_stage(isolated, now, 2)
++
++    def _spotify_mainfarm_dispatch_stage(self, cfg, map_pos, now):
++        c2_fast_owned = self._c2_fast_worker_owns(cfg)
++        if c2_fast_owned:
++            self.c2_fast_supervisor_pause = False
++            return STOP_TICK
++
++        engine = self.behavior_engine
++        with engine.input_lock:
++            acted = bool(engine._dispatch_movement(cfg, map_pos, now))
++            if engine._aux_allowed(cfg, now):
++                engine.last_aux_tick_at = now
++                acted = bool(engine.core._spotify_auxiliary_step(cfg, now)) or acted
++        engine._transition_state(engine._semantic_state(cfg, map_pos, now), now)
++        engine.last_tick_at = now
++        return STOP_TICK if acted else CONTINUE
++
+     def bot_loop(self):
+         while self.running:
+             loop_start = time.monotonic()
+@@ -3038,64 +3172,8 @@
+                 if self.target_tracker.box is not None:
+                     self.target_tracker.reset()
+ 
+-                if not cfg.get("preview_only"):
+-                    # Spotify binary exposes is_selling_event: while perform_auto_sell
+-                    # owns the UI, farm/Buff/Loot must not inject movement or keys.
+-                    if self.sell_lock.locked():
+-                        if c2_fast_owned:
+-                            self.c2_fast_supervisor_pause = True
+-                            self.behavior_engine.release_inputs()
+-                        else:
+-                            self.release_move()
+-                    else:
+-                        self._run_periodic_actions(cfg, now)
+-
+-                        condition_due = (not cfg.get("sell_only_when_full")) or self.spotify_full_bag_event.is_set()
+-                        cooldown_ok = (now - self.last_sell_time) * 1000 >= cfg["sell_cooldown"]
+-                        sell_requested = bool(
+-                            cfg.get("auto_sell")
+-                            and cooldown_ok
+-                            and (self.spotify_sell_timer_event.is_set() or condition_due)
+-                        )
+-
+-                        if sell_requested:
+-                            # Pause C2 farm input, but its worker keeps refreshing minimap
+-                            # position so SAFE_PLACE movement uses current coordinates.
+-                            if c2_fast_owned:
+-                                self.c2_fast_supervisor_pause = True
+-                            if getattr(self, "spotify_r54_safe_state", "MOVE_SAFE") == "SAFE_FAIL":
+-                                self.behavior_engine.core._spotify_reset_safe_place_state()
+-                            p = cfg.get("map_profile") or {}
+-                            has_safe = p.get("SAFE_PLACE_X") is not None and p.get("SAFE_PLACE_Y") is not None
+-                            safe_outcome = self.behavior_engine.safe_place_step(cfg, map_pos, now) if has_safe else "FAILED"
+-                            if safe_outcome == "READY":
+-                                self.spotify_full_bag_event.clear()
+-                                if not self.spotify_sell_inflight:
+-                                    self.spotify_sell_timer_event.clear()
+-                                    self.spotify_sell_inflight = True
+-                                    self.run_sell_thread(cfg)
+-                                self.behavior_engine.core._spotify_reset_safe_place_state()
+-                            elif safe_outcome == "FAILED":
+-                                self.spotify_full_bag_event.clear()
+-                                self.spotify_sell_timer_event.clear()
+-                                self.last_sell_time = now
+-                                self.behavior_engine.release_inputs()
+-                                self._log("[Spotify Safe] Xác minh SAFE_PLACE thất bại; hủy lượt bán.")
+-                        else:
+-                            if c2_fast_owned:
+-                                # Dedicated C2 worker already runs recovery -> movement/attack
+-                                # -> Buff/Loot/Pet. Never inject a second controller tick.
+-                                self.c2_fast_supervisor_pause = False
+-                            else:
+-                                # All non-C2 profiles keep V9.3's serialized scheduler.
+-                                self.behavior_engine.tick(cfg, map_pos, now)
+-
+-                            # SpotifyRecoveredCore is the sole producer of movement,
+-                            # attack cadence, Buff and Loot input.
+-                else:
+-                    if c2_fast_owned:
+-                        self.c2_fast_supervisor_pause = True
+-                    self.release_move()
++                self._run_periodic_actions(cfg, now)
++                self.spotify_main_farm_orchestrator.tick(cfg, map_pos, now)
+ 
+                 # Annotated preview
+                 annotated = bgr.copy()
