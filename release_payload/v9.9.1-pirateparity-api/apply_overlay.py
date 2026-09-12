@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import shutil
 import sys
 from pathlib import Path
 
@@ -51,7 +50,10 @@ def main() -> None:
 
     source = Path(__file__).with_name("spotify_recovered_api.py")
     target = root / "app_payload/spotify_recovered_api.py"
-    shutil.copyfile(source, target)
+    # Git for Windows may checkout text files as CRLF. Normalize the packaged
+    # adapter to LF so the artifact and SHA are deterministic on every runner.
+    api_text = source.read_text(encoding="utf-8")
+    target.write_text(api_text, encoding="utf-8", newline="\n")
 
     got_behavior = sha256(behavior)
     got_api = sha256(target)
