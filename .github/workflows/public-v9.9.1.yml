@@ -1,0 +1,157 @@
+name: Publish Nghia Client V9.9.1
+
+on:
+  push:
+    branches:
+      - release-v9.9.1-all-cure-recovery
+    paths:
+      - .github/workflows/public-v9.9.1.yml
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: '9.9.1'
+  SOURCE_RUN_ID: '34713814180'
+  SOURCE_COMMIT: '0985c88681df231e356f488d39fb1c0cf10f077b'
+  PORTABLE_SHA256: '52254f523d5b80d8a65f8a87bfcacfa446ca25c738ffe0fe7aa9a5466df68e99'
+  UPDATE_SHA256: '51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download verified V9.9.1 preflight artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force release_in,verify | Out-Null
+          gh run download $env:SOURCE_RUN_ID --repo $env:REPO -n v9.9.1-all-cure-preflight -D release_in
+          if ($LASTEXITCODE -ne 0) { throw 'failed to download verified V9.9.1 preflight artifact' }
+          foreach($name in @('NghiaClient_V9.9.1_Portable.zip','NghiaEdition_Update_v9.9.1.zip','preflight_hashes.txt','preflight_report.json')) {
+            if (!(Test-Path (Join-Path release_in $name))) { throw "missing verified artifact member $name" }
+          }
+
+      - name: Gate exact hashes and preflight report
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib,json
+          def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          expected={
+            'release_in/NghiaClient_V9.9.1_Portable.zip':'52254f523d5b80d8a65f8a87bfcacfa446ca25c738ffe0fe7aa9a5466df68e99',
+            'release_in/NghiaEdition_Update_v9.9.1.zip':'51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366',
+          }
+          for p,want in expected.items():
+              got=sha(p)
+              if got != want: raise SystemExit(f'hash mismatch {p}: {got} != {want}')
+          report=json.loads(Path('release_in/preflight_report.json').read_text(encoding='utf-8'))
+          required={
+            'version':'9.9.1','tests':148,'failures':0,'errors':0,
+            'portable_sha256':expected['release_in/NghiaClient_V9.9.1_Portable.zip'],
+            'update_sha256':expected['release_in/NghiaEdition_Update_v9.9.1.zip'],
+            'all_cure_workflow_evidence_ready':True,
+            'all_cure_templates_bundled':False,
+            'all_cure_runtime_requires_12_user_templates':True,
+            'public_publish_performed':False,
+          }
+          for k,v in required.items():
+              if report.get(k) != v: raise SystemExit(f'preflight report mismatch {k}: {report.get(k)!r} != {v!r}')
+          print('V991_VERIFIED_PREFLIGHT_GATE_OK')
+          '@ | python -
+
+      - name: Create public V9.9.1 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v9.9.1 --repo $env:REPO *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v9.9.1 release already exists; refusing duplicate publish' }
+          gh release create v9.9.1 --repo $env:REPO --target $env:SOURCE_COMMIT `
+            --title "Nghia Client v9.9.1 - All Cure Recovery" `
+            --notes "V9.9.1 completes recovered All Cure workflow evidence and keeps runtime fail-safe until all 12 external All Cure PNG templates are valid. Includes V9.9 forensic parity updates: recovered disconnect 0.95 path, watchdog-owned sell jitter, main-farm ordering, Pirate Den 2 timing parity, MiuMiu state-machine selling, C2 hold-combo/focus parity, and Windows launcher/Nuitka verification. Preflight: 148 passed, 4 deselected, 0 failures. All Cure templates are not bundled; use NẠP 12 ẢNH ALL CURE in the client." `
+            release_in/NghiaClient_V9.9.1_Portable.zip `
+            release_in/NghiaEdition_Update_v9.9.1.zip `
+            release_in/preflight_hashes.txt `
+            release_in/preflight_report.json
+          if ($LASTEXITCODE -ne 0) { throw 'public V9.9.1 release creation failed' }
+
+      - name: Redownload and verify public release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v9.9.1 --repo $env:REPO `
+            -p NghiaClient_V9.9.1_Portable.zip `
+            -p NghiaEdition_Update_v9.9.1.zip `
+            -D verify
+          if ($LASTEXITCODE -ne 0) { throw 'public V9.9.1 redownload failed' }
+          @'
+          from pathlib import Path
+          import hashlib
+          def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          checks={
+            'verify/NghiaClient_V9.9.1_Portable.zip':'52254f523d5b80d8a65f8a87bfcacfa446ca25c738ffe0fe7aa9a5466df68e99',
+            'verify/NghiaEdition_Update_v9.9.1.zip':'51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366',
+          }
+          for p,want in checks.items():
+              got=sha(p)
+              if got != want: raise SystemExit(f'public release hash mismatch {p}: {got} != {want}')
+          print('V991_PUBLIC_ASSETS_VERIFIED')
+          '@ | python -
+
+      - name: Publish latest.json LAST
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64,json,subprocess
+          repo='bachlangcomic-creator/maplenghia'
+          manifest={
+            'version':'9.9.1',
+            'channel':'stable',
+            'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.1/NghiaEdition_Update_v9.9.1.zip',
+            'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.1/NghiaEdition_Update_v9.9.1.zip',
+            'sha256':'51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366',
+            'payload_dir':'app_payload',
+            'min_launcher_version':'1.0.1',
+            'notes':'V9.9.1 All Cure Recovery + V9.9 forensic parity. All Cure workflow evidence is recovered; runtime requires the 12 external PNG templates to be imported before READY.'
+          }
+          raw=(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n').encode('utf-8')
+          current=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          payload=json.dumps({
+            'message':'release: point stable latest.json to V9.9.1',
+            'content':base64.b64encode(raw).decode('ascii'),
+            'sha':current['sha'],
+            'branch':'main'
+          })
+          subprocess.run(['gh','api','--method','PUT',f'repos/{repo}/contents/latest.json','--input','-'],input=payload,text=True,check=True)
+          print('V991_LATEST_JSON_PUBLISHED_LAST')
+          '@ | python -
+
+      - name: Verify public manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64,json,subprocess
+          repo='bachlangcomic-creator/maplenghia'
+          data=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          manifest=json.loads(base64.b64decode(data['content']).decode('utf-8'))
+          assert manifest['version']=='9.9.1'
+          assert manifest['sha256']=='51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366'
+          assert manifest['package_url'].endswith('/v9.9.1/NghiaEdition_Update_v9.9.1.zip')
+          print('V991_PUBLIC_MANIFEST_VERIFIED')
+          '@ | python -
