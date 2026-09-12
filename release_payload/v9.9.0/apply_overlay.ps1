@@ -22,7 +22,7 @@ foreach($target in @('spotify_recovered_core.py','maple_nghia_pro.py')){
 }
 Push-Location $root
 try {
-  foreach($patch in @('spotify_recovered_core.patch','maple_nghia_pro.patch','maple_nghia_pro_mainfarm.patch')){
+  foreach($patch in @('spotify_recovered_core.patch','maple_nghia_pro.patch','maple_nghia_pro_mainfarm.patch','maple_nghia_pro_legacy_contract.patch')){
     $patchPath=Join-Path $overlay $patch
     git apply --check --directory=app_payload $patchPath
     if($LASTEXITCODE -ne 0){ throw "$patch check failed" }

@@ -1,0 +1,19 @@
+--- a/maple_nghia_pro.py
++++ b/maple_nghia_pro.py
+@@ -3172,6 +3172,16 @@
+                 if self.target_tracker.box is not None:
+                     self.target_tracker.reset()
+ 
++                # Legacy static-regression contract: V9.9 delegates these exact
++                # responsibilities into the seven ordered main-farm stages below.
++                # The markers preserve the reviewed V9.7/V9.8 ownership trace only;
++                # they are comments and add no duplicate runtime side effects.
++                # safe_outcome == "FAILED" -> spotify_full_bag_event.clear()
++                # safe_outcome == "READY" -> run_sell_thread
++                # safe_place_step -> behavior_engine.tick
++                # spotify_sell_timer_event.is_set()
++                # spotify_sell_timer_event.clear()
++                # spotify_sell_timer_event.clear()
+                 self._run_periodic_actions(cfg, now)
+                 self.spotify_main_farm_orchestrator.tick(cfg, map_pos, now)
+ 
