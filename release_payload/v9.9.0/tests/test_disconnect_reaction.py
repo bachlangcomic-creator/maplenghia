@@ -4,6 +4,8 @@ import textwrap
 from pathlib import Path
 from types import SimpleNamespace
 
+import spotify_watchdog as wmod
+
 APP = Path(os.environ["APP_PAYLOAD"])
 
 
@@ -60,3 +62,52 @@ def test_disconnect_reaction_runtime_latches_until_nonmatch_reset():
     assert host.spotify_disconnect_latched is False
     assert reaction(host, matched, cfg) is True
     assert host.calls.count(("alert", "dc")) == 2
+
+
+def test_watchdog_forwards_disconnect_nonmatch_so_latch_can_reset():
+    class StopAfterWait:
+        def __init__(self):
+            self.stopped = False
+
+        def is_set(self):
+            return self.stopped
+
+        def wait(self, _seconds):
+            self.stopped = True
+            return True
+
+    class WatchHost:
+        runtime_cfg = None
+
+        def __init__(self):
+            self.emitted = []
+
+        def _spotify_watchdog_interval(self, cfg):
+            return 0.001
+
+        def _spotify_cached_game_hwnd(self):
+            return 1
+
+        def _spotify_watchdog_capture_frame(self, cfg, hwnd):
+            return object()
+
+        def _spotify_watchdog_scan_frame(self, frame, cfg):
+            return [SimpleNamespace(kind="disconnect", matched=False)]
+
+        def _spotify_watchdog_emit(self, result, cfg):
+            self.emitted.append(result)
+
+        def _log(self, text):
+            pass
+
+    host = WatchHost()
+    worker = wmod.SpotifyWatchdogWorker(host)
+    worker._stop = StopAfterWait()
+    worker._run(
+        {"spotify_watchdog_parity_enabled": True, "auto_sell_timer_enabled": False},
+        worker.generation,
+    )
+
+    assert len(host.emitted) == 1
+    assert host.emitted[0].kind == "disconnect"
+    assert host.emitted[0].matched is False
