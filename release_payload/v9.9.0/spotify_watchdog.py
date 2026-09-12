@@ -20,6 +20,7 @@ class SpotifyWatchdogWorker:
         self._stop = threading.Event()
         self.last_sell_time = time.monotonic()
         self.next_sell_delay = None
+        self.sell_due_pending = False
 
     def start(self, cfg):
         if self.thread and self.thread.is_alive():
@@ -29,6 +30,7 @@ class SpotifyWatchdogWorker:
         self._stop.clear()
         self.last_sell_time = time.monotonic()
         self.next_sell_delay = None
+        self.sell_due_pending = False
         self.thread = threading.Thread(
             target=self._run,
             args=(dict(cfg), generation),
@@ -56,20 +58,23 @@ class SpotifyWatchdogWorker:
     def notify_sell_completed(self, now=None):
         self.last_sell_time = time.monotonic() if now is None else float(now)
         self.next_sell_delay = None
+        self.sell_due_pending = False
 
     def _sell_schedule_step(self, cfg):
         if not cfg.get("auto_sell_timer_enabled"):
             self.next_sell_delay = None
+            self.sell_due_pending = False
             self.last_sell_time = time.monotonic()
+            return
+        if self.sell_due_pending:
             return
         if self.next_sell_delay is None:
             self.next_sell_delay, _source = self.get_next_sell_delay(cfg)
         now = time.monotonic()
         if now - self.last_sell_time < self.next_sell_delay:
             return
+        self.sell_due_pending = True
         self.host._spotify_watchdog_sell_timer_due(cfg)
-        self.last_sell_time = now
-        self.next_sell_delay, _source = self.get_next_sell_delay(cfg)
 
     def _run(self, initial_cfg, generation):
         while not self._stop.is_set() and generation == self.generation:
