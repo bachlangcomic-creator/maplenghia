@@ -252,7 +252,9 @@ jobs:
               for p in sorted(root.rglob('*')):
                   if p.is_file(): z.write(p,p.relative_to(root).as_posix())
           sha=hashlib.sha256(dst.read_bytes()).hexdigest()
-          suite=ET.parse('v995-junit.xml').getroot()
+          root_xml=ET.parse('v995-junit.xml').getroot()
+          suite=root_xml if root_xml.tag == 'testsuite' else root_xml.find('testsuite')
+          if suite is None: raise SystemExit(f'unexpected JUnit root: {root_xml.tag}')
           tests=int(suite.attrib.get('tests','0'))
           failures=int(suite.attrib.get('failures','0'))
           errors=int(suite.attrib.get('errors','0'))
