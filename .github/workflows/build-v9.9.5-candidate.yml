@@ -57,18 +57,14 @@ jobs:
           $roots=@(Get-ChildItem source_extract -Directory)
           if ($roots.Count -ne 1) { throw "expected one source root, got $($roots.Count)" }
           Copy-Item (Join-Path $roots[0].FullName '*') candidate -Recurse -Force
-          Push-Location candidate
-          try {
-            git apply --check ../release_payload/v9.9.5/v995_core.patch
-            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 core patch check failed' }
-            git apply ../release_payload/v9.9.5/v995_core.patch
-            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 core patch apply failed' }
-            git apply --check ../release_payload/v9.9.5/v995_tests_metadata.patch
-            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 tests/metadata patch check failed' }
-            git apply ../release_payload/v9.9.5/v995_tests_metadata.patch
-            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 tests/metadata patch apply failed' }
-          }
-          finally { Pop-Location }
+          git apply --check --directory=candidate release_payload/v9.9.5/v995_core.patch
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 core patch check failed' }
+          git apply --directory=candidate release_payload/v9.9.5/v995_core.patch
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 core patch apply failed' }
+          git apply --check --directory=candidate release_payload/v9.9.5/v995_tests_metadata.patch
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 tests/metadata patch check failed' }
+          git apply --directory=candidate release_payload/v9.9.5/v995_tests_metadata.patch
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 tests/metadata patch apply failed' }
           @'
           from pathlib import Path
           import hashlib, json
