@@ -1,0 +1,223 @@
+name: Publish Nghia Client V9.9.2 PirateParity Recovered API
+
+on:
+  push:
+    branches:
+      - release-v9.9.1-pirateparity-api
+    paths:
+      - .github/workflows/public-v9.9.2.yml
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: '9.9.2'
+  SOURCE_RUN_ID: '34721383835'
+  SOURCE_COMMIT: '62500d998a846351df57beb4a23c868b7a81cf2c'
+  SOURCE_PORTABLE_SHA256: '3706c90c202cc60940129d8fe6d3b53b637a7f870b60e646a1161849dcb1fa23'
+  SOURCE_UPDATE_SHA256: 'de3bfe03f6de949b0bc403715ef9d2558bcd074d3f22d958940132c45afccdc7'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download verified PirateParity Recovered API preflight
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force source_in,stage_portable,stage_update,out,verify | Out-Null
+          gh run download $env:SOURCE_RUN_ID --repo $env:REPO -n v9.9.1-pirateparity-recovered-api-preflight -D source_in
+          if ($LASTEXITCODE -ne 0) { throw 'failed to download verified source preflight artifact' }
+          foreach($name in @(
+            'NghiaClient_V9.9.1_PirateParity_SpotifyRecoveredAPI_Portable.zip',
+            'NghiaEdition_Update_v9.9.1_PirateParity_SpotifyRecoveredAPI.zip',
+            'preflight_hashes.txt','preflight_report.json')) {
+            if (!(Test-Path (Join-Path source_in $name))) { throw "missing verified source artifact member $name" }
+          }
+
+      - name: Gate exact source hashes and report
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import hashlib,json
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          expected={
+            'source_in/NghiaClient_V9.9.1_PirateParity_SpotifyRecoveredAPI_Portable.zip':'3706c90c202cc60940129d8fe6d3b53b637a7f870b60e646a1161849dcb1fa23',
+            'source_in/NghiaEdition_Update_v9.9.1_PirateParity_SpotifyRecoveredAPI.zip':'de3bfe03f6de949b0bc403715ef9d2558bcd074d3f22d958940132c45afccdc7',
+          }
+          for p,want in expected.items():
+              got=sha(p)
+              if got != want: raise SystemExit(f'source hash mismatch {p}: {got} != {want}')
+          report=json.loads(Path('source_in/preflight_report.json').read_text(encoding='utf-8'))
+          required={
+            'version':'9.9.1',
+            'variant':'PirateParity+SpotifyRecoveredAPI',
+            'tests':156,'failures':0,'errors':0,'skipped':0,
+            'portable_sha256':expected['source_in/NghiaClient_V9.9.1_PirateParity_SpotifyRecoveredAPI_Portable.zip'],
+            'update_sha256':expected['source_in/NghiaEdition_Update_v9.9.1_PirateParity_SpotifyRecoveredAPI.zip'],
+            'nuitka_build':True,'windows_launcher_smoke':True,
+            'dynamic_combo_active':False,'public_publish_performed':False,
+          }
+          for k,v in required.items():
+              if report.get(k) != v: raise SystemExit(f'source preflight mismatch {k}: {report.get(k)!r} != {v!r}')
+          print('V992_SOURCE_PREFLIGHT_GATE_OK')
+          '@ | python -
+
+      - name: Repackage verified source as V9.9.2
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib,json
+          srcp=Path('source_in/NghiaClient_V9.9.1_PirateParity_SpotifyRecoveredAPI_Portable.zip')
+          srcu=Path('source_in/NghiaEdition_Update_v9.9.1_PirateParity_SpotifyRecoveredAPI.zip')
+          proot=Path('stage_portable'); uroot=Path('stage_update')
+          with ZipFile(srcp) as z: z.extractall(proot)
+          with ZipFile(srcu) as z: z.extractall(uroot)
+          (proot/'version.json').write_text(json.dumps({'version':'9.9.2'},indent=2)+'\n',encoding='utf-8')
+          (proot/'user_data').mkdir(exist_ok=True)
+          status={'latest_version':'9.9.2','local_version':'9.9.2','notes':'V9.9.2 PirateParity + SpotifyRecoveredAPI stable release','state':'up_to_date'}
+          (proot/'user_data'/'update_status.json').write_text(json.dumps(status,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          crash=proot/'user_data'/'launcher_crash.log'
+          if crash.exists(): crash.unlink()
+          if (proot/'user_data'/'all_cure_images').exists(): raise SystemExit('portable must not bundle user All Cure templates')
+          for bad in ('pyinstaller_work','pyinstaller_spec'):
+              if (proot/bad).exists(): raise SystemExit(f'PyInstaller directory present: {bad}')
+          rpath=uroot/'release.json'
+          release=json.loads(rpath.read_text(encoding='utf-8'))
+          release['version']='9.9.2'
+          rpath.write_text(json.dumps(release,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          if any(p.parts and p.parts[0]=='user_data' for p in uroot.rglob('*')):
+              raise SystemExit('update stage contains user_data')
+          for root in (proot/'app_payload', uroot/'app_payload'):
+              if not (root/'spotify_recovered_api.py').exists(): raise SystemExit('missing spotify_recovered_api.py')
+              behavior=(root/'spotify_behavior_engine.py').read_text(encoding='utf-8')
+              if 'SpotifyRecoveredAPI' not in behavior or 'self.api.dispatch' not in behavior:
+                  raise SystemExit('behavior engine is not routed through SpotifyRecoveredAPI')
+              core=(root/'spotify_recovered_core.py').read_text(encoding='utf-8')
+              if core.count('_spotify_dynamic_combo_reconstructed(') != 1:
+                  raise SystemExit('Dynamic Combo caller state changed unexpectedly')
+          out=Path('out'); out.mkdir(exist_ok=True)
+          pzip=out/'NghiaClient_V9.9.2_Portable.zip'
+          uzip=out/'NghiaEdition_Update_v9.9.2.zip'
+          def pack(src,dst):
+              src=Path(src)
+              with ZipFile(dst,'w',ZIP_DEFLATED,compresslevel=9) as z:
+                  for p in sorted(src.rglob('*')):
+                      if p.is_file(): z.write(p,p.relative_to(src).as_posix())
+          pack(proot,pzip); pack(uroot,uzip)
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          ph,uh=sha(pzip),sha(uzip)
+          (out/'preflight_hashes.txt').write_text(f'NghiaClient_V9.9.2_Portable.zip {ph}\nNghiaEdition_Update_v9.9.2.zip {uh}\n',encoding='utf-8')
+          report={'version':'9.9.2','variant':'PirateParity+SpotifyRecoveredAPI','inherited_verified_source_run':34721383835,'inherited_tests':156,'failures':0,'errors':0,'skipped':0,'portable_sha256':ph,'update_sha256':uh,'nuitka_build':True,'dynamic_combo_active':False,'metadata_only_repackage_from_verified_source':True,'public_publish_performed':False}
+          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(report,indent=2))
+          '@ | python -
+
+      - name: Real Windows launcher smoke on V9.9.2 package
+        shell: pwsh
+        run: |
+          $root=(Resolve-Path 'stage_portable').Path
+          $crash=Join-Path $root 'user_data/launcher_crash.log'
+          if (Test-Path $crash) { Remove-Item $crash -Force }
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3; $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V992_REAL_DEFAULT_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Create public V9.9.2 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v9.9.2 --repo $env:REPO *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v9.9.2 release already exists; refusing duplicate publish' }
+          gh release create v9.9.2 --repo $env:REPO --target $env:SOURCE_COMMIT `
+            --title "Nghia Client v9.9.2 - PirateParity + SpotifyRecoveredAPI" `
+            --notes "V9.9.2 keeps the verified V9.9.1 core while applying PirateParity and the recovered Spotify API topology. Pirate Den 2 and Pirate Den 2 1-Hit own their built-in top/bottom loot schedules independently of the generic Auto Loot toggle. SpotifyBehaviorEngine routes recovered farm modes through SpotifyRecoveredAPI. Dynamic Combo remains definition-only/dormant because no active Spotify farm caller has been recovered. Source preflight: 156 passed, 0 failures/errors; Nuitka build and Windows launcher smoke verified. V9.9.2 package receives an additional Windows launcher smoke before publication." `
+            out/NghiaClient_V9.9.2_Portable.zip `
+            out/NghiaEdition_Update_v9.9.2.zip `
+            out/preflight_hashes.txt `
+            out/preflight_report.json
+          if ($LASTEXITCODE -ne 0) { throw 'public V9.9.2 release creation failed' }
+
+      - name: Redownload and verify public release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v9.9.2 --repo $env:REPO -p NghiaClient_V9.9.2_Portable.zip -p NghiaEdition_Update_v9.9.2.zip -D verify
+          if ($LASTEXITCODE -ne 0) { throw 'public V9.9.2 redownload failed' }
+          @'
+          from pathlib import Path
+          import hashlib,json
+          report=json.loads(Path('out/preflight_report.json').read_text(encoding='utf-8'))
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          checks={'verify/NghiaClient_V9.9.2_Portable.zip':report['portable_sha256'],'verify/NghiaEdition_Update_v9.9.2.zip':report['update_sha256']}
+          for p,want in checks.items():
+              got=sha(p)
+              if got != want: raise SystemExit(f'public release hash mismatch {p}: {got} != {want}')
+          print('V992_PUBLIC_ASSETS_VERIFIED')
+          '@ | python -
+
+      - name: Publish latest.json LAST
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64,json,subprocess
+          from pathlib import Path
+          repo='bachlangcomic-creator/maplenghia'
+          report=json.loads(Path('out/preflight_report.json').read_text(encoding='utf-8'))
+          manifest={'version':'9.9.2','channel':'stable','package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.2/NghiaEdition_Update_v9.9.2.zip','url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.2/NghiaEdition_Update_v9.9.2.zip','sha256':report['update_sha256'],'payload_dir':'app_payload','min_launcher_version':'1.0.1','notes':'V9.9.2 PirateParity + SpotifyRecoveredAPI. Pirate routes own their recovered loot schedules; recovered farm modes dispatch through SpotifyRecoveredAPI. Dynamic Combo remains dormant pending an evidenced Spotify caller.'}
+          raw=(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n').encode('utf-8')
+          current=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          existing=json.loads(base64.b64decode(current['content']).decode('utf-8'))
+          if existing.get('version') != '9.9.1': raise SystemExit(f"latest.json changed unexpectedly before publish: {existing.get('version')}")
+          payload=json.dumps({'message':'release: point stable latest.json to V9.9.2','content':base64.b64encode(raw).decode('ascii'),'sha':current['sha'],'branch':'main'})
+          subprocess.run(['gh','api','--method','PUT',f'repos/{repo}/contents/latest.json','--input','-'],input=payload,text=True,check=True)
+          print('V992_LATEST_JSON_PUBLISHED_LAST')
+          '@ | python -
+
+      - name: Verify public manifest and release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64,json,subprocess
+          from pathlib import Path
+          repo='bachlangcomic-creator/maplenghia'
+          report=json.loads(Path('out/preflight_report.json').read_text(encoding='utf-8'))
+          data=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          manifest=json.loads(base64.b64decode(data['content']).decode('utf-8'))
+          assert manifest['version']=='9.9.2'
+          assert manifest['sha256']==report['update_sha256']
+          assert manifest['package_url'].endswith('/v9.9.2/NghiaEdition_Update_v9.9.2.zip')
+          rel=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/tags/v9.9.2'],text=True))
+          assert rel['draft'] is False and rel['prerelease'] is False
+          print('V992_PUBLIC_RELEASE_AND_MANIFEST_VERIFIED')
+          '@ | python -
