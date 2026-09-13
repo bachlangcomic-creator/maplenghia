@@ -1,0 +1,329 @@
+diff --git a/app_payload/maple_nghia_pro.py b/app_payload/maple_nghia_pro.py
+index 57e293f..9846616 100644
+--- a/app_payload/maple_nghia_pro.py
++++ b/app_payload/maple_nghia_pro.py
+@@ -366,13 +366,13 @@ class MapleNghiaPro(MapleVisionClient):
+         # Final-4 input ownership: every explicit keyDown is tracked so focus loss,
+         # STOP, or an exception can release it deterministically.
+         self._input_keys_down = set()
+-        # C2 Fast Farm Worker: a dedicated minimap-only scheduler removes the
+-        # controller's full-screen detection/preview overhead from Spotify's C2
+-        # Teleport+Skill cadence. The supervisor still owns alerts and MiuMiu.
+-        self.c2_fast_thread = None
+-        self.c2_fast_worker_generation = 0
+-        self.c2_fast_last_map_pos = None
+-        self.c2_fast_last_seen = 0.0
++        # Spotify Main Farm Worker: one dedicated minimap-only scheduler owns
++        # farm cadence for every recovered Spotify profile. The supervisor keeps
++        # full-screen alerts, preview/UI work and MiuMiu coordination.
++        self.spotify_main_farm_thread = None
++        self.spotify_main_farm_worker_generation = 0
++        self.spotify_main_farm_last_map_pos = None
++        self.spotify_main_farm_last_seen = 0.0
+         self.c2_pause_reasons = C2PauseReasons()
+         self.c2_runtime_trace = C2RuntimeTraceBuffer(
+             enabled=str(os.environ.get("NGHIA_C2_RUNTIME_TRACE", "")).strip() == "1"
+@@ -380,9 +380,9 @@ class MapleNghiaPro(MapleVisionClient):
+         self.c2_runtime_trace_path = resolve_mutable_file(
+             "c2_runtime_trace.jsonl", Path(__file__).resolve().parent
+         )
+-        self.c2_fast_capture_failures = 0
++        self.spotify_main_farm_capture_failures = 0
+         # Spotify Focus Parity A: the dedicated 0.2s worker owns all Win32
+-        # focus lookups. Combat/C2 hot paths only read this cache.
++        # focus lookups. Farm/combat hot paths only read this cache.
+         self.spotify_focus_cache = SpotifyFocusCache(
+             self._spotify_find_exact_window,
+             self._spotify_get_foreground_window,
+@@ -1402,14 +1402,14 @@ class MapleNghiaPro(MapleVisionClient):
+                 else:
+                     self._log("[C2 Adaptive Y] OFF: C2 dùng Y cố định từ maps.json như Spotify profile.")
+ 
+-        self._start_c2_fast_worker(cfg)
+-        if str(cfg.get("current_map", "")).strip().upper() == "C2" and bool(cfg.get("spotify_runtime_parity_mode", True)):
+-            self._log("[C2 Fast] ON: worker riêng chỉ capture minimap 300x250; full-screen UI/alert chạy ở supervisor.")
++        self._start_spotify_main_farm_worker(cfg)
++        if self.behavior_engine.handles_profile(cfg) and bool(cfg.get("spotify_runtime_parity_mode", True)):
++            self._log("[MainFarm] ON: một worker riêng capture minimap 300x250 cho mọi profile Spotify; full-screen UI/alert chạy ở supervisor.")
+ 
+     def stop_bot(self):
+         # V9: behavior engine is the single shutdown owner for combat/movement input.
+         self._c2_pause_add("stop")
+-        self.c2_fast_worker_generation += 1
++        self.spotify_main_farm_worker_generation += 1
+         self.spotify_sell_inflight = False
+         self.spotify_all_cure_market.stop()
+         self.spotify_watchdog.stop()
+@@ -2476,18 +2476,16 @@ class MapleNghiaPro(MapleVisionClient):
+                 self.last_map_missing_log = time.monotonic()
+             return None
+ 
+-    def _c2_fast_worker_owns(self, cfg):
+-        """Return True only when the dedicated C2 worker should own farm input."""
++    def _spotify_main_farm_worker_owns(self, cfg):
++        """Return True when the dedicated Spotify main-farm worker owns farm input."""
+         return bool(
+-            str(cfg.get("current_map", "")).strip().upper() == "C2"
+-            and self._spotify_profile_kind(cfg) == "LEFT_RIGHT"
++            self.behavior_engine.handles_profile(cfg)
+             and bool(cfg.get("spotify_runtime_parity_mode", True))
+-            and not bool(cfg.get("preview_only", False))
+-            and self.c2_fast_thread is not None
+-            and self.c2_fast_thread.is_alive()
++            and self.spotify_main_farm_thread is not None
++            and self.spotify_main_farm_thread.is_alive()
+         )
+ 
+-    def _capture_c2_minimap_direct(self, cfg, mss_ctx=None, hwnd=None):
++    def _capture_spotify_minimap_direct(self, cfg, mss_ctx=None, hwnd=None):
+         """Capture only Spotify MINIMAP_MONITOR (300x250) from Maple's outer window.
+ 
+         This intentionally avoids ``capture_screen`` because MapleVisionClient keeps
+@@ -2574,7 +2572,7 @@ class MapleNghiaPro(MapleVisionClient):
+         except Exception:
+             return None
+ 
+-    def _c2_fast_observe_position(self, pos, now):
++    def _spotify_main_farm_observe_position(self, pos, now):
+         """Preserve V9.3's existing two-frame minimap outlier guard without
+         changing SpotifyBehaviorEngine itself.
+         """
+@@ -2636,27 +2634,27 @@ class MapleNghiaPro(MapleVisionClient):
+         except Exception as exc:
+             self._log(f"[C2 Trace] dump failed: {exc}")
+ 
+-    def _start_c2_fast_worker(self, cfg):
+-        self.c2_fast_worker_generation += 1
+-        generation = self.c2_fast_worker_generation
+-        self.c2_fast_last_map_pos = None
+-        self.c2_fast_last_seen = 0.0
++    def _start_spotify_main_farm_worker(self, cfg):
++        self.spotify_main_farm_worker_generation += 1
++        generation = self.spotify_main_farm_worker_generation
++        self.spotify_main_farm_last_map_pos = None
++        self.spotify_main_farm_last_seen = 0.0
+         self.c2_pause_reasons.clear()
+-        self.c2_fast_capture_failures = 0
+-        if str(cfg.get("current_map", "")).strip().upper() != "C2":
++        self.spotify_main_farm_capture_failures = 0
++        if not self.behavior_engine.handles_profile(cfg):
+             return
+         if not bool(cfg.get("spotify_runtime_parity_mode", True)):
+             return
+-        self.c2_fast_thread = threading.Thread(
+-            target=self._c2_fast_farm_worker,
++        self.spotify_main_farm_thread = threading.Thread(
++            target=self._spotify_main_farm_worker,
+             args=(dict(cfg), generation),
+             daemon=True,
+-            name="Nghia-C2-FastFarm",
++            name="Nghia-Spotify-MainFarm",
+         )
+-        self.c2_fast_thread.start()
++        self.spotify_main_farm_thread.start()
+ 
+-    def _c2_fast_farm_worker(self, initial_cfg, generation):
+-        """Dedicated Spotify C2 farm loop: minimap -> behavior tick -> repeat.
++    def _spotify_main_farm_worker(self, initial_cfg, generation):
++        """Dedicated Spotify main-farm loop: minimap -> behavior tick -> repeat.
+ 
+         No full-screen template scan, preview rendering, or controller FPS pacing is
+         allowed on this path. ``SpotifyBehaviorEngine`` remains the sole arbiter for
+@@ -2668,18 +2666,20 @@ class MapleNghiaPro(MapleVisionClient):
+             if mss is not None:
+                 local_mss = mss.mss()
+             # Focus Parity A owns exact-title HWND resolution. Prime it once before
+-            # the fast loop, then consume only the cached HWND in the C2 hot path.
++            # the fast loop, then consume only the cached HWND in the farm hot path.
+             try:
+                 self._spotify_focus_refresh(initial_cfg, force=False)
+             except Exception:
+                 pass
+             hwnd = self._spotify_cached_game_hwnd()
+-            while self.running and generation == self.c2_fast_worker_generation:
++            while self.running and generation == self.spotify_main_farm_worker_generation:
+                 cfg = dict(self.runtime_cfg or initial_cfg)
+-                if str(cfg.get("current_map", "")).strip().upper() != "C2":
++                if not self.behavior_engine.handles_profile(cfg):
++                    self.behavior_engine.release_inputs()
+                     time.sleep(0.01)
+                     continue
+                 if not bool(cfg.get("spotify_runtime_parity_mode", True)):
++                    self.behavior_engine.release_inputs()
+                     time.sleep(0.01)
+                     continue
+ 
+@@ -2693,18 +2693,18 @@ class MapleNghiaPro(MapleVisionClient):
+                     time.sleep(0.01)
+                     continue
+                 try:
+-                    roi = self._capture_c2_minimap_direct(cfg, local_mss, hwnd)
++                    roi = self._capture_spotify_minimap_direct(cfg, local_mss, hwnd)
+                     raw_pos = self._detect_spotify_player_from_minimap(roi, cfg)
+-                    map_pos = self._c2_fast_observe_position(raw_pos, time.monotonic())
+-                    self.c2_fast_last_map_pos = map_pos
++                    map_pos = self._spotify_main_farm_observe_position(raw_pos, time.monotonic())
++                    self.spotify_main_farm_last_map_pos = map_pos
+                     if map_pos is not None:
+-                        self.c2_fast_last_seen = time.monotonic()
+-                    self.c2_fast_capture_failures = 0
++                        self.spotify_main_farm_last_seen = time.monotonic()
++                    self.spotify_main_farm_capture_failures = 0
+                 except Exception as exc:
+-                    self.c2_fast_capture_failures += 1
++                    self.spotify_main_farm_capture_failures += 1
+                     map_pos = None
+-                    if self.c2_fast_capture_failures == 1 or self.c2_fast_capture_failures % 50 == 0:
+-                        self._log(f"[C2 Fast] Lỗi capture minimap: {exc}")
++                    if self.spotify_main_farm_capture_failures == 1 or self.spotify_main_farm_capture_failures % 50 == 0:
++                        self._log(f"[MainFarm] Lỗi capture minimap: {exc}")
+ 
+                 if (self._c2_pause_blocked() or self.sell_lock.locked()
+                         or bool(cfg.get("preview_only", False))):
+@@ -2715,14 +2715,14 @@ class MapleNghiaPro(MapleVisionClient):
+                 now = time.monotonic()
+                 self._c2_trace_emit("tick_start")
+                 self.spotify_main_farm_orchestrator.tick(
+-                    cfg, map_pos, now, owner="C2"
++                    cfg, map_pos, now, owner="MAIN_FARM"
+                 )
+                 self._c2_trace_emit("tick_end")
+                 # Only a tiny yield is added. Spotify's recovered combo/branch sleeps
+                 # remain the cadence source; this is not an attack delay.
+                 time.sleep(0.001)
+         except Exception as exc:
+-            self._log(f"[C2 Fast] Worker dừng do lỗi: {exc}")
++            self._log(f"[MainFarm] Worker dừng do lỗi: {exc}")
+             self.behavior_engine.release_inputs()
+         finally:
+             if local_mss is not None:
+@@ -3115,16 +3115,16 @@ class MapleNghiaPro(MapleVisionClient):
+             self.spotify_full_bag_event.set()
+ 
+     def _spotify_mainfarm_state_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="STATE")
+         if cfg.get("preview_only"):
+-            if owner == "C2":
++            if owner == "MAIN_FARM":
+                 self.behavior_engine.release_inputs()
+             else:
+                 self.release_move()
+             return STOP_TICK
+         if self.sell_lock.locked():
+-            if owner == "C2":
++            if owner == "MAIN_FARM":
+                 self.behavior_engine.release_inputs()
+             else:
+                 self.release_move()
+@@ -3150,7 +3150,7 @@ class MapleNghiaPro(MapleVisionClient):
+         return CONTINUE
+ 
+     def _spotify_mainfarm_sell_safe_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="SELL_SAFE")
+         condition_due = (not cfg.get("sell_only_when_full")) or self.spotify_full_bag_event.is_set()
+         cooldown_ok = (now - self.last_sell_time) * 1000 >= cfg["sell_cooldown"]
+@@ -3190,7 +3190,7 @@ class MapleNghiaPro(MapleVisionClient):
+         return STOP_TICK
+ 
+     def _spotify_mainfarm_pet_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="PET")
+         with self.behavior_engine.input_lock:
+             if self.behavior_engine.pet_step(cfg, now):
+@@ -3198,7 +3198,7 @@ class MapleNghiaPro(MapleVisionClient):
+         return CONTINUE
+ 
+     def _spotify_mainfarm_recovery_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="RECOVERY")
+         with self.behavior_engine.input_lock:
+             if self.behavior_engine.core._spotify_recovery_layer_step(cfg, map_pos, now):
+@@ -3222,7 +3222,7 @@ class MapleNghiaPro(MapleVisionClient):
+         return CONTINUE
+ 
+     def _spotify_mainfarm_buff1_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="BUFF1")
+         isolated = dict(cfg)
+         isolated["buff_2_enabled"] = False
+@@ -3230,7 +3230,7 @@ class MapleNghiaPro(MapleVisionClient):
+         return self._spotify_mainfarm_buff_stage(isolated, now, 1)
+ 
+     def _spotify_mainfarm_buff2_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="BUFF2")
+         isolated = dict(cfg)
+         isolated["buff_1_enabled"] = False
+@@ -3238,7 +3238,7 @@ class MapleNghiaPro(MapleVisionClient):
+         return self._spotify_mainfarm_buff_stage(isolated, now, 2)
+ 
+     def _spotify_mainfarm_dispatch_stage(self, cfg, map_pos, now, owner="SUPERVISOR"):
+-        if owner == "C2":
++        if owner == "MAIN_FARM":
+             self._c2_trace_emit("stage", name="DISPATCH")
+         engine = self.behavior_engine
+         with engine.input_lock:
+@@ -3265,13 +3265,19 @@ class MapleNghiaPro(MapleVisionClient):
+                 gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+                 now = time.monotonic()
+ 
+-                # C2 Fast Farm owns minimap detection + farm tick on a dedicated thread.
+-                # The full-screen supervisor only consumes its latest point for MiuMiu.
+-                c2_fast_owned = self._c2_fast_worker_owns(cfg)
+-                if c2_fast_owned:
+-                    map_pos = self.c2_fast_last_map_pos
++                # Exact Spotify profiles are farm-owned by one dedicated minimap worker.
++                # Worker liveness is kept separate from ownership: if the worker dies,
++                # the full-screen supervisor remains fail-closed instead of taking farm input.
++                spotify_mainfarm_profile_owned = bool(
++                    self.behavior_engine.handles_profile(cfg)
++                    and bool(cfg.get("spotify_runtime_parity_mode", True))
++                )
++                spotify_mainfarm_worker_alive = self._spotify_main_farm_worker_owns(cfg)
++                if spotify_mainfarm_worker_alive:
++                    map_pos = self.spotify_main_farm_last_map_pos
+                 else:
+-                    # C1/B1/B3 and fallback C2 keep the original controller detector.
++                    # Detection here is supervisor/preview context only; it is never
++                    # allowed to regain farm cadence for an exact Spotify profile.
+                     map_pos = self.behavior_engine.detect_player(frame, cfg)
+ 
+                 # Monster-recognition của bản Nghĩa đã được tắt hoàn toàn.
+@@ -3310,10 +3316,9 @@ class MapleNghiaPro(MapleVisionClient):
+                 # spotify_sell_timer_event.clear()
+                 # spotify_sell_timer_event.clear()
+                 self._run_periodic_actions(cfg, now)
+-                if not c2_fast_owned:
+-                    self.spotify_main_farm_orchestrator.tick(
+-                        cfg, map_pos, now, owner="SUPERVISOR"
+-                    )
++                # Farm cadence for exact Spotify profiles is worker-only.  There is
++                # deliberately no supervisor fallback: worker failure pauses farming
++                # rather than creating a second input owner.
+ 
+                 # Annotated preview
+                 annotated = bgr.copy()
+@@ -3362,10 +3367,11 @@ class MapleNghiaPro(MapleVisionClient):
+             # Deep Runtime Parity removes only that extra frame pacing.
+             exact_runtime = ("cfg" in locals() and self.behavior_engine.handles_profile(cfg) and
+                              bool(cfg.get("spotify_runtime_parity_mode", True)))
+-            # C2's farm cadence now lives on the minimap-only worker. Pace only the
+-            # heavy full-screen supervisor so preview/alert scans cannot contend with
+-            # Teleport+Skill timing. Non-C2 exact-runtime behavior is unchanged.
+-            if "cfg" in locals() and "c2_fast_owned" in locals() and c2_fast_owned:
++            # All exact Spotify farm cadence lives on the minimap-only worker.
++            # Pace the heavy supervisor for every supported Spotify profile so its
++            # preview/alert scans cannot contend with recovered helper/input sleeps.
++            if ("cfg" in locals() and "spotify_mainfarm_profile_owned" in locals()
++                    and spotify_mainfarm_profile_owned):
+                 fps = cfg.get("fps", 8)
+                 elapsed = time.monotonic() - loop_start
+                 time.sleep(max(0.001, 1.0 / fps - elapsed))
