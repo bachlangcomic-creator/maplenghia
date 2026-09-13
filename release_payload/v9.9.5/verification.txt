@@ -1,0 +1,31 @@
+V9.9.5 AllMapWorkerParity source candidate verification
+
+Source baseline: Nghia_V9.9.4_C2FocusWorkerParity_FullSourceCandidate.zip
+Source candidate: Nghia_V9.9.5_AllMapWorkerParity_FullSourceCandidate.zip
+Source candidate SHA-256: be20b53b58145374827585310429a2ad8612cde7d5dfa165d778b6da2b8294d1
+Core delta patch SHA-256: 4c315ce041835d5c6837608d4f52bca2e7b3a876a731a8df8a00f0bbe06b4ac4
+
+Verification performed on the final candidate tree:
+- pytest: 31 passed, 0 failed
+- compileall: PASS
+- ZIP integrity: PASS
+- patch apply from clean V9.9.4 baseline: PASS
+- changed-file byte comparison after patch apply: 14/14 match
+- generated caches excluded from final ZIP
+
+Protected hashes retained:
+- spotify_recovered_core.py: 123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb
+- spotify_behavior_engine.py: de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97
+- spotify_recovered_api.py: 1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339
+- spotify_timing_catalog.py: b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066
+- spotify_focus_parity.py: 987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1
+- spotify_miumiu_sell.py: 2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6
+- spotify_pc_alarm.py: a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4
+- maps.json: 52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d
+
+Changed runtime file:
+- maple_nghia_pro.py: b8ef87ea30fdb2551c176576fda734953236974b0df789cc32a8866d7956fc57
+
+Release boundary:
+- No Windows/Nuitka binary is included here.
+- Stable latest.json must not be updated until Windows build + launcher smoke + release verification pass.
