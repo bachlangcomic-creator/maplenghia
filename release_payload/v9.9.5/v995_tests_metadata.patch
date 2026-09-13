@@ -1,0 +1,425 @@
+diff --git a/VERIFIED_HASHES.json b/VERIFIED_HASHES.json
+index 5efe01c..5f2d471 100644
+--- a/VERIFIED_HASHES.json
++++ b/VERIFIED_HASHES.json
+@@ -1,11 +1,13 @@
+ {
+   "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
+-  "maple_nghia_pro.py": "a10cefa53e29d950013c8a1cd254b5c749789972b557432aff64026132f82c4d",
++  "maple_nghia_pro.py": "b8ef87ea30fdb2551c176576fda734953236974b0df789cc32a8866d7956fc57",
+   "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
+   "spotify_c2_runtime_support.py": "7eb2e8db0aa21aa71f3dce750e90370a5d602422c52a335dab26b8ea447235ed",
+   "spotify_behavior_engine.py": "de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97",
+   "spotify_recovered_api.py": "1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339",
+   "spotify_timing_catalog.py": "b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066",
+   "spotify_focus_parity.py": "987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1",
++  "spotify_miumiu_sell.py": "2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6",
++  "spotify_pc_alarm.py": "a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4",
+   "maps.json": "52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d"
+ }
+diff --git a/source_preflight_report.json b/source_preflight_report.json
+index f5363e7..b0d6694 100644
+--- a/source_preflight_report.json
++++ b/source_preflight_report.json
+@@ -1,41 +1,37 @@
+ {
+-  "version": "9.9.4",
+-  "variant": "C2FocusWorkerParity",
+-  "artifact_kind": "full_source_private_candidate",
+-  "base_candidate_version": "9.9.3",
+-  "base_public_version": "9.9.2",
+-  "local_v994_tests": {
+-    "count": 17,
++  "version": "9.9.5",
++  "variant": "AllMapWorkerParity",
++  "artifact_kind": "full_source_candidate",
++  "base_candidate_version": "9.9.4",
++  "local_v995_tests": {
++    "count": 31,
+     "failures": 0,
+     "errors": 0,
+     "passed": true
+   },
+   "compileall": true,
+-  "c2_focus_worker_parity_guards": {
+-    "direct_focus_game_call_in_c2_helper": false,
+-    "cached_focus_checked_before_direction_ownership": true,
+-    "mid_combo_cached_focus_abort": true,
+-    "legacy_focus_fallback_only_when_parity_disabled": true
+-  },
+-  "timing_unchanged": {
+-    "action_hold_ms": [
+-      20,
+-      50
+-    ],
+-    "pair_wait_s": [
+-      0.05,
+-      0.15
+-    ],
+-    "outer_window_s": [
+-      0.2,
+-      0.5
+-    ],
+-    "pre_combo_s": 0.05,
+-    "pydirectinput_pause_s": 0.1
++  "main_farm_worker_guards": {
++    "all_recovered_profiles_worker_owned": true,
++    "supervisor_farm_dispatch_removed": true,
++    "worker_uses_cached_hwnd": true,
++    "worker_fullscreen_capture_call": false,
++    "worker_direct_window_enumeration": false,
++    "worker_failure_supervisor_fallback": false,
++    "worker_yield_s": 0.001
+   },
++  "stage_order": [
++    "STATE",
++    "SELL_SAFE",
++    "PET",
++    "RECOVERY",
++    "BUFF1",
++    "BUFF2",
++    "DISPATCH"
++  ],
++  "timing_policy": "No recovered per-map timing or route module was modified in V9.9.5.",
+   "final_source_hashes": {
++    "maple_nghia_pro.py": "b8ef87ea30fdb2551c176576fda734953236974b0df789cc32a8866d7956fc57",
+     "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
+-    "maple_nghia_pro.py": "a10cefa53e29d950013c8a1cd254b5c749789972b557432aff64026132f82c4d",
+     "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
+     "spotify_c2_runtime_support.py": "7eb2e8db0aa21aa71f3dce750e90370a5d602422c52a335dab26b8ea447235ed"
+   },
+@@ -44,27 +40,27 @@
+     "spotify_recovered_api.py": "1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339",
+     "spotify_timing_catalog.py": "b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066",
+     "spotify_focus_parity.py": "987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1",
++    "spotify_miumiu_sell.py": "2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6",
++    "spotify_pc_alarm.py": "a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4",
+     "maps.json": "52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d"
+   },
+   "protected_behavior": {
+-    "c1_b1_b3_routing_unchanged": true,
+-    "pirate_behavior_source_protected": true,
++    "c1_c2_b1_b3_dispatch_unchanged": true,
++    "bunny_dispatch_unchanged": true,
++    "stand_still_dispatch_unchanged": true,
++    "pirate2_dispatch_unchanged": true,
++    "pirate2_1hit_dispatch_unchanged": true,
+     "timing_catalog_hash_protected": true,
+     "focus_module_hash_protected": true,
+-    "maps_hash_protected": true
++    "maps_hash_protected": true,
++    "miumiu_hash_protected": true,
++    "pc_alarm_hash_protected": true
+   },
+   "not_verified_in_this_environment": {
+     "windows_nuitka_build": true,
+     "windows_launcher_smoke": true,
+-    "full_historical_regression_matrix": true,
+     "same_machine_spotify_ab_runtime_trace": true
+   },
+   "runtime_ab_validated": false,
+-  "public_publish_performed": false,
+-  "stable_latest_verified_version": "9.9.2",
+-  "runtime_reference_targets_s": {
+-    "median": 0.6333,
+-    "mean": 0.6369,
+-    "p90": 0.7433
+-  }
++  "public_publish_performed": false
+ }
+diff --git a/tests/test_allmap_dispatch_focus_parity.py b/tests/test_allmap_dispatch_focus_parity.py
+new file mode 100644
+index 0000000..0ecd94c
+--- /dev/null
++++ b/tests/test_allmap_dispatch_focus_parity.py
+@@ -0,0 +1,67 @@
++import os
++import sys
++from pathlib import Path
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++sys.path.insert(0, str(APP_PAYLOAD))
++
++from spotify_recovered_api import SpotifyRecoveredAPI
++
++
++class FakeCore:
++    def __init__(self):
++        self.calls = []
++
++    def _spotify_left_right_step(self, cfg, pos, now):
++        self.calls.append(("LEFT_RIGHT", cfg["current_map"]))
++        return True
++
++    def _spotify_stand_still_step(self, cfg, pos, now):
++        self.calls.append(("STAND_STILL", cfg["current_map"]))
++        return True
++
++    def _spotify_bunny_step(self, cfg, pos, now):
++        self.calls.append(("BUNNY", cfg["current_map"]))
++        return True
++
++    def _spotify_pirate_step(self, cfg, pos, now, one_hit=False):
++        self.calls.append(("PIRATE2_1HIT" if one_hit else "PIRATE2", cfg["current_map"]))
++        return True
++
++
++def test_dispatch_routes_stay_profile_specific():
++    cases = [
++        ("LEFT_RIGHT", "C1"),
++        ("LEFT_RIGHT", "C2"),
++        ("LEFT_RIGHT", "B1"),
++        ("LEFT_RIGHT", "B3"),
++        ("BUNNY", "Bunny"),
++        ("STAND_STILL", "Stand Still"),
++        ("PIRATE2", "Red-Nose Pirate Den 2"),
++        ("PIRATE2_1HIT", "Red-Nose Pirate Den 2 (1 Hit)"),
++    ]
++    for kind, name in cases:
++        core = FakeCore()
++        api = SpotifyRecoveredAPI(core)
++        assert api.dispatch(kind, {"current_map": name}, (100.0, 160.0), 1.0) is True
++        assert core.calls == [(kind, name)]
++
++
++def test_generic_worker_hot_path_uses_cached_hwnd_and_no_window_enumeration():
++    source = (APP_PAYLOAD / "maple_nghia_pro.py").read_text(encoding="utf-8")
++    start = source.index("    def _spotify_main_farm_worker(self, initial_cfg, generation):")
++    end = source.index("    @staticmethod\n    def _spotify_profile_kind_from", start)
++    worker = source[start:end]
++    assert "_spotify_cached_game_hwnd()" in worker
++    assert "_spotify_focus_refresh(initial_cfg, force=False)" in worker
++    assert "_find_game_window(" not in worker
++    assert "EnumWindows" not in worker
++    assert "capture_screen(" not in worker
++
++
++def test_parity_focus_branch_consumes_cache_only():
++    source = (APP_PAYLOAD / "maple_nghia_pro.py").read_text(encoding="utf-8")
++    game_focus = source[source.index("    def _game_has_focus"):source.index("    def _focus_game")]
++    focus_game = source[source.index("    def _focus_game"):source.index("    @staticmethod\n    def _direct_key_name")]
++    assert "_spotify_cached_game_has_focus()" in game_focus
++    assert "_spotify_cached_game_has_focus()" in focus_game
+diff --git a/tests/test_allmap_mainfarm_integration.py b/tests/test_allmap_mainfarm_integration.py
+new file mode 100644
+index 0000000..ee911f4
+--- /dev/null
++++ b/tests/test_allmap_mainfarm_integration.py
+@@ -0,0 +1,42 @@
++import os
++from pathlib import Path
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++SOURCE = (APP_PAYLOAD / "maple_nghia_pro.py").read_text(encoding="utf-8")
++
++
++def body(start_name: str, end_name: str) -> str:
++    start = SOURCE.index(f"    def {start_name}")
++    end = SOURCE.index(f"    def {end_name}", start)
++    return SOURCE[start:end]
++
++
++def test_sell_handoff_sets_pause_before_async_seller():
++    section = body("_spotify_mainfarm_sell_safe_stage", "_spotify_mainfarm_pet_stage")
++    ready = section[section.index('if safe_outcome == "READY":'):]
++    assert ready.index('_c2_pause_add("sell")') < ready.index("run_sell_thread(cfg)")
++
++
++def test_periodic_helper_stays_disabled_for_spotify_profiles():
++    section = body("_run_periodic_actions", "_game_capture_rect")
++    assert "self.behavior_engine.handles_profile(cfg)" in section
++    guard = section.index("self.behavior_engine.handles_profile(cfg)")
++    assert "return" in section[guard:guard + 160]
++
++
++def test_stop_invalidates_generic_worker_before_behavior_shutdown():
++    section = body("stop_bot", "_apply_map_profile")
++    assert section.index("spotify_main_farm_worker_generation += 1") < section.index("self.behavior_engine.stop()")
++
++
++def test_c2_stage_trace_follows_generic_main_farm_owner():
++    for start_name, end_name in [
++        ("_spotify_mainfarm_state_stage", "_spotify_mainfarm_sell_safe_stage"),
++        ("_spotify_mainfarm_sell_safe_stage", "_spotify_mainfarm_pet_stage"),
++        ("_spotify_mainfarm_pet_stage", "_spotify_mainfarm_recovery_stage"),
++        ("_spotify_mainfarm_recovery_stage", "_spotify_mainfarm_buff_stage"),
++        ("_spotify_mainfarm_buff1_stage", "_spotify_mainfarm_buff2_stage"),
++        ("_spotify_mainfarm_buff2_stage", "_spotify_mainfarm_dispatch_stage"),
++    ]:
++        section = body(start_name, end_name)
++        assert 'owner == "MAIN_FARM"' in section
+diff --git a/tests/test_allmap_mainfarm_owner.py b/tests/test_allmap_mainfarm_owner.py
+new file mode 100644
+index 0000000..d51a147
+--- /dev/null
++++ b/tests/test_allmap_mainfarm_owner.py
+@@ -0,0 +1,33 @@
++import os
++from pathlib import Path
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++SOURCE = (APP_PAYLOAD / "maple_nghia_pro.py").read_text(encoding="utf-8")
++
++
++def _body(start_name: str, end_name: str) -> str:
++    start = SOURCE.index(f"    def {start_name}")
++    end = SOURCE.index(f"    def {end_name}", start)
++    return SOURCE[start:end]
++
++
++def test_generic_main_farm_worker_exists_and_is_not_c2_gated():
++    assert "def _start_spotify_main_farm_worker" in SOURCE
++    assert "def _spotify_main_farm_worker" in SOURCE
++    start = SOURCE.index("    def _spotify_main_farm_worker(self, initial_cfg, generation):")
++    end = SOURCE.index("    @staticmethod\n    def _spotify_profile_kind_from", start)
++    worker = SOURCE[start:end]
++    assert 'owner="MAIN_FARM"' in worker
++    assert 'current_map", "")).strip().upper() != "C2"' not in worker
++    assert "capture_screen(" not in worker
++    assert "_find_game_window(" not in worker
++    assert "_spotify_cached_game_hwnd()" in worker
++    assert "time.sleep(0.001)" in worker
++
++
++def test_start_and_stop_use_one_generic_worker_generation():
++    assert "spotify_main_farm_worker_generation" in SOURCE
++    assert "spotify_main_farm_thread" in SOURCE
++    assert "self._start_spotify_main_farm_worker(cfg)" in SOURCE
++    stop = _body("stop_bot", "_apply_map_profile")
++    assert "spotify_main_farm_worker_generation += 1" in stop
+diff --git a/tests/test_allmap_supervisor_safety.py b/tests/test_allmap_supervisor_safety.py
+new file mode 100644
+index 0000000..6b9f966
+--- /dev/null
++++ b/tests/test_allmap_supervisor_safety.py
+@@ -0,0 +1,23 @@
++import os
++from pathlib import Path
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++SOURCE = (APP_PAYLOAD / "maple_nghia_pro.py").read_text(encoding="utf-8")
++BOT = SOURCE[SOURCE.index("    def bot_loop"):SOURCE.index("    def push_preview")]
++
++
++def test_supervisor_uses_profile_ownership_and_worker_liveness_separately():
++    assert "spotify_mainfarm_profile_owned =" in BOT
++    assert "spotify_mainfarm_worker_alive =" in BOT
++    assert "spotify_main_farm_last_map_pos" in BOT
++
++
++def test_supervisor_never_calls_mainfarm_orchestrator():
++    assert "spotify_main_farm_orchestrator.tick(" not in BOT
++    assert 'owner="SUPERVISOR"' not in BOT
++
++
++def test_supervisor_is_fps_paced_for_exact_spotify_profiles():
++    pacing = BOT[BOT.index("# All exact Spotify farm cadence lives on the minimap-only worker."):]
++    assert "spotify_mainfarm_profile_owned" in pacing
++    assert "time.sleep(max(0.001, 1.0 / fps - elapsed))" in BOT
+diff --git a/tests/test_c2_mainfarm_owner.py b/tests/test_c2_mainfarm_owner.py
+index 504cb3f..257a1ec 100644
+--- a/tests/test_c2_mainfarm_owner.py
++++ b/tests/test_c2_mainfarm_owner.py
+@@ -30,24 +30,24 @@ class RecordingHost:
+         return self._stage("DISPATCH", owner)
+ 
+ 
+-def test_c2_owner_runs_exact_recovered_stage_order():
++def test_main_farm_owner_runs_exact_recovered_stage_order():
+     host = RecordingHost()
+-    SpotifyMainFarmOrchestrator(host).tick({}, (100.0, 170.0), 1.0, owner="C2")
++    SpotifyMainFarmOrchestrator(host).tick({}, (100.0, 170.0), 1.0, owner="MAIN_FARM")
+     assert host.calls == [
+-        ("STATE", "C2"), ("SELL_SAFE", "C2"), ("PET", "C2"),
+-        ("RECOVERY", "C2"), ("BUFF1", "C2"), ("BUFF2", "C2"),
+-        ("DISPATCH", "C2"),
++        ("STATE", "MAIN_FARM"), ("SELL_SAFE", "MAIN_FARM"), ("PET", "MAIN_FARM"),
++        ("RECOVERY", "MAIN_FARM"), ("BUFF1", "MAIN_FARM"), ("BUFF2", "MAIN_FARM"),
++        ("DISPATCH", "MAIN_FARM"),
+     ]
+ 
+ 
+-def test_source_has_single_c2_farm_owner_and_supervisor_skip():
++def test_source_has_single_main_farm_owner_and_supervisor_skip():
+     source = (APP_PAYLOAD / "maple_nghia_pro.py").read_text(encoding="utf-8")
+-    ws = source.index("    def _c2_fast_farm_worker")
++    ws = source.index("    def _spotify_main_farm_worker(self, initial_cfg, generation):")
+     we = source.index("    @staticmethod\n    def _spotify_profile_kind_from", ws)
+     worker = source[ws:we]
+     assert 'spotify_main_farm_orchestrator.tick(' in worker
+-    assert 'owner="C2"' in worker
++    assert 'owner="MAIN_FARM"' in worker
+     assert "self.behavior_engine.tick(cfg, map_pos" not in worker
+     bot = source[source.index("    def bot_loop"):]
+-    assert "if not c2_fast_owned:" in bot
+-    assert 'owner="SUPERVISOR"' in bot
++    assert "spotify_main_farm_orchestrator.tick(" not in bot
++    assert 'owner="SUPERVISOR"' not in bot
+diff --git a/tests/test_v995_timing_guards.py b/tests/test_v995_timing_guards.py
+new file mode 100644
+index 0000000..cac2c9c
+--- /dev/null
++++ b/tests/test_v995_timing_guards.py
+@@ -0,0 +1,53 @@
++import hashlib
++import os
++import sys
++from pathlib import Path
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++sys.path.insert(0, str(APP_PAYLOAD))
++
++PROTECTED = {
++    "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
++    "spotify_behavior_engine.py": "de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97",
++    "spotify_recovered_api.py": "1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339",
++    "spotify_timing_catalog.py": "b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066",
++    "spotify_focus_parity.py": "987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1",
++    "spotify_miumiu_sell.py": "2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6",
++    "spotify_pc_alarm.py": "a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4",
++    "maps.json": "52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d",
++}
++
++
++def sha(name: str) -> str:
++    return hashlib.sha256((APP_PAYLOAD / name).read_bytes()).hexdigest()
++
++
++def test_v994_recovered_runtime_files_remain_byte_identical():
++    for name, expected in PROTECTED.items():
++        assert sha(name) == expected
++
++
++def test_non_c2_recovered_timing_catalog_is_locked():
++    from spotify_timing_catalog import SPOTIFY_EXACT, SPOTIFY_RECONSTRUCTED_54
++
++    assert SPOTIFY_EXACT["left_right"] == {
++        "fall_confirm_s": 2.5,
++        "fall_release_settle_s": 0.01,
++        "long_rest_threshold": 0.02,
++        "long_rest_s": (3.0, 5.0),
++        "human_action_threshold": 0.08,
++        "human_action_ms": (150, 300),
++        "pre_combo_s": 0.05,
++        "hold_combo_ms": (200, 500),
++    }
++    assert SPOTIFY_EXACT["bunny"]["spam_s"] == 3.0
++    assert SPOTIFY_EXACT["bunny"]["turn_left_ms"] == 50
++    assert SPOTIFY_EXACT["bunny"]["hold_ms"] == (200, 500)
++    assert SPOTIFY_EXACT["stand_still"]["reset_interval_s"] == (20, 40)
++    assert SPOTIFY_EXACT["stand_still"]["reset_hold_ms"] == (400, 1500)
++    assert SPOTIFY_EXACT["pirate2"]["farm_pre_combo_s"] == 0.05
++    assert SPOTIFY_EXACT["pirate2"]["farm_combo_ms"] == (200, 500)
++    assert SPOTIFY_EXACT["pirate2"]["farm_human_ms"] == (150, 300)
++    assert SPOTIFY_EXACT["pirate2_1hit"]["right_wait_ms"] == (300, 1500)
++    assert SPOTIFY_EXACT["pirate2_1hit"]["left_wait_s"] == 1.5
++    assert SPOTIFY_RECONSTRUCTED_54["fall_recovery"]["value"] == (200, 600)
+diff --git a/version.json b/version.json
+index 43e9687..6eb6fa4 100644
+--- a/version.json
++++ b/version.json
+@@ -1,3 +1,3 @@
+ {
+-  "version": "9.9.4"
++  "version": "9.9.5"
+ }
