@@ -1,0 +1,31 @@
+name: Bootstrap V9.9.4 Source Input Release
+
+on:
+  push:
+    branches:
+      - release-v9.9.4-c2focus
+    paths:
+      - .github/workflows/bootstrap-v9.9.4-source-input.yml
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap-source-input:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create temporary source-input prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: bachlangcomic-creator/maplenghia
+        run: |
+          set -euo pipefail
+          if gh release view v9.9.4-source-input --repo "$REPO" >/dev/null 2>&1; then
+            echo "v9.9.4-source-input already exists; leaving it unchanged"
+            exit 0
+          fi
+          gh release create v9.9.4-source-input --repo "$REPO" --target release-v9.9.4-c2focus --prerelease \
+            --title "V9.9.4 Source Input (temporary)" \
+            --notes "Temporary, hash-gated source input for the V9.9.4 Windows/Nuitka stable build. Upload exactly: Nghia_V9.9.4_C2FocusWorkerParity_FullSourceCandidate.zip (SHA-256 77b0a3cfe379b0efe2d980b117b41171d437c6177fdfc05cd8c494c7d809542b). This prerelease is not the stable client release."
+          echo "V994_SOURCE_INPUT_RELEASE_READY"
