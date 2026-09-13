@@ -1,0 +1,47 @@
+--- v9.9.3/app_payload/spotify_recovered_core.py
++++ v9.9.4/app_payload/spotify_recovered_core.py
+@@ -562,12 +562,11 @@
+         """
+         flash_key = str(cfg.get("tele_key") or "").strip()
+         skill_key = str(skill_key or "").strip()
+-        if not direction_key or not skill_key or not self._focus_game(cfg):
++        if not direction_key or not skill_key:
+             return False
+ 
+         use_flash = bool(flash_key and cfg.get("tele_enabled", True))
+         end_time = time.monotonic() + max(0.02, float(hold_time))
+-        self.set_move(direction_key)
+         did = False
+         trace = getattr(self, "_c2_trace_emit", None)
+ 
+@@ -576,9 +575,17 @@
+             if callable(pause_check) and pause_check():
+                 return False, "pause"
+             if bool(cfg.get("spotify_force_focus_parity", True)):
++                # Spotify parity path: hot C2 reads only the worker-owned cache.
++                # No FindWindowW/EnumWindows/foreground work belongs in this helper.
+                 focus_check = getattr(self, "_spotify_cached_game_has_focus", None)
+                 if callable(focus_check) and not focus_check():
+                     return False, "focus"
++            else:
++                # Preserve the old safety contract when focus parity is explicitly
++                # disabled; this branch is not the Spotify-parity hot path.
++                legacy_focus_check = getattr(self, "_game_has_focus", None)
++                if callable(legacy_focus_check) and not legacy_focus_check(cfg):
++                    return False, "focus"
+             return True, ""
+ 
+         def abort_if_unsafe():
+@@ -590,6 +597,12 @@
+                 trace("combo_abort", reason=reason)
+             return True
+ 
++        # Fail safe before C2 owns the movement key. This removes the final
++        # per-combo _focus_game() call from the Spotify parity critical path.
++        if abort_if_unsafe():
++            return False
++        self.set_move(direction_key)
++
+         if trace:
+             trace("combo_start", hold_time_s=float(hold_time), direction=str(direction_key))
+         try:
