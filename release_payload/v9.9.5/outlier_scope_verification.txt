@@ -1,0 +1,32 @@
+V9.9.5 Outlier Scope Parity verification
+
+Root cause:
+- V9.9.4 used _c2_fast_observe_position only inside the C2 fast worker.
+- Initial V9.9.5 generalized the worker but reused the C2 two-frame outlier guard for every Spotify profile.
+
+Correction:
+- C1/B1/B3/Bunny/Stand Still/C1 Stand Still/Pirate2/Pirate2 1-Hit accept detected minimap positions immediately.
+- C2 retains the existing two-frame outlier stability extension.
+- No recovered timing/route module was modified.
+
+Local verification:
+- RED before fix: 9/9 new outlier-scope cases failed on the old helper contract.
+- GREEN after fix: 9/9 new outlier-scope cases passed.
+- Full suite: 40/40 passed.
+- compileall: PASS.
+- Patch apply from clean V9.9.4: 82/82 non-patch files byte-identical to corrected candidate.
+- Corrected maple_nghia_pro.py SHA-256: 8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48
+- v995_outlier_scope.patch SHA-256: 27fcd754ee2d9c57ff1a1da3f032ddc91e473efc331a4363e3baf429febd593b
+- Corrected source ZIP SHA-256: d897e7cebaefa9d8dbdc99adc98ed28f0b9cce5c7fb9a4f8abc996981e67563b
+
+Protected hashes unchanged:
+- spotify_recovered_core.py 123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb
+- spotify_behavior_engine.py de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97
+- spotify_recovered_api.py 1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339
+- spotify_timing_catalog.py b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066
+- spotify_focus_parity.py 987774bdca786302001a0145474761986a0e8f9539b7f277157b40bf5b6fb9d1
+- spotify_miumiu_sell.py 2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6
+- spotify_pc_alarm.py a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4
+- maps.json 52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d
+
+Windows/Nuitka build for this corrected source has NOT yet been rerun. Do not publish stable from the previous Windows candidate.
