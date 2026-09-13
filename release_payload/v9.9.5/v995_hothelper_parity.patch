@@ -1,0 +1,480 @@
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/BUILD_STATUS.md v9.9.5-after/BUILD_STATUS.md
+--- v9.9.5-before/BUILD_STATUS.md	2026-09-13 17:22:56.000000000 +0000
++++ v9.9.5-after/BUILD_STATUS.md	2026-09-13 19:00:46.557957938 +0000
+@@ -1,23 +1,24 @@
+-# V9.9.5 AllMapWorkerParity — Full Source Candidate
++# V9.9.5 AllMapWorkerParity + HotHelperCorrection — Full Source Candidate
+ 
+ Status:
+-- Based on the verified V9.9.4 C2FocusWorkerParity full-source candidate.
+-- Generalized the dedicated minimap-only farm worker from C2 to every Spotify profile handled by the recovered dispatcher: C1/C2/B1/B3, Bunny, Stand Still/C1 Stand Still, Red-Nose Pirate Den 2, and Red-Nose Pirate Den 2 (1 Hit).
+-- The full-screen supervisor no longer owns farm cadence for exact Spotify profiles; it remains responsible for preview/UI/alert scanning and MiuMiu coordination.
+-- Worker liveness is separate from profile ownership: worker failure is fail-closed and does not hand farm input back to the supervisor.
+-- The worker uses the cached Spotify HWND, captures only the 300x250 minimap ROI, runs the existing player detector, applies the two-frame outlier extension only for C2, and calls the seven-stage `SpotifyMainFarmOrchestrator` with owner `MAIN_FARM`.
+-- Existing focus-cache behavior remains unchanged. The farm worker performs no `_find_game_window`, `EnumWindows`, or full-screen `capture_screen` work in its hot loop.
+-- Non-C2 profiles now consume detected minimap positions directly; the C2 two-frame outlier extension is preserved only for C2, restoring the pre-generalization scope.
+-- Existing recovered per-map timing/route modules are hash-locked and intentionally unchanged.
++- Based on the corrected V9.9.5 AllMapWorkerParity candidate where the two-frame outlier extension is scoped back to C2 only.
++- Dedicated minimap-only `main_farm_worker` remains the single farm owner for C1/C2/B1/B3, Bunny, Stand Still/C1 Stand Still, Red-Nose Pirate Den 2, and Red-Nose Pirate Den 2 (1 Hit).
++- Final Spotify Offline V4 re-audit confirmed the strongest static SIMPLE call graph as `Farm.run_left_and_right -> hold_combo_action`; no `perform_dynamic_combo` reference is present in the Farm.left_and_right cluster.
++- C1/C2/B1/B3 now all route through the shared `hold_combo_action`; C2 is no longer special-routed to the separate Dynamic Combo SPAM candidate.
++- Shared `hold_combo_action` no longer borrows `0.015..0.045` and `0.125..0.255` sleeps; those values remain assigned only to `random_move` in the timing catalog.
++- Shared Flash/Skill taps use the direct global `ATTACK_HOLD_MIN/MAX = 50..150 ms` as the strongest current structural hypothesis. This inner distribution is explicitly NOT claimed as exact recovered source.
++- Dynamic Combo SPAM `20..50 ms` + `0.05..0.15 s` remains preserved as a separate facility and is not deleted.
++- All-map worker topology, cached-focus architecture, C2 outlier scope, MiuMiu, PC Alarm, maps.json, updater and launcher behavior remain unchanged.
+ - Main-farm stage order remains `STATE -> SELL_SAFE -> PET -> RECOVERY -> BUFF1 -> BUFF2 -> DISPATCH`.
+-- MiuMiu atomic sell handoff, Recovery, Buff/Loot/Pet, PC Alarm, Adaptive Y defaults and maps.json coordinates remain unchanged.
+-- 40/40 candidate pytest tests pass locally, including explicit non-C2 direct-position and C2 two-frame outlier-scope regression tests.
++- 43/43 candidate pytest tests pass locally, including explicit hot-helper regression coverage.
+ - Python `compileall` passes locally.
+-- Windows executables are NOT included in this source candidate until Windows/Nuitka build and launcher smoke are run.
++- Windows executables are NOT included in this source candidate until a fresh Windows/Nuitka build and launcher smoke are run from this corrected source.
++- Same-machine Spotify runtime A/B is still required before claiming visual/runtime 1:1 parity.
+ - Stable `latest.json` was not modified.
+ 
+-Protected V9.9.4 runtime hashes retained:
+-- `spotify_recovered_core.py`: `123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb`
++Key hashes:
++- `spotify_recovered_core.py`: `18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95`
++- `maple_nghia_pro.py`: `8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48`
+ - `spotify_behavior_engine.py`: `de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97`
+ - `spotify_recovered_api.py`: `1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339`
+ - `spotify_timing_catalog.py`: `b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066`
+@@ -25,3 +26,4 @@
+ - `spotify_miumiu_sell.py`: `2cabfe5db7830d4eed8ed5d0a6e485cf62a0f7352fe79b71ce46fcad3a8f99c6`
+ - `spotify_pc_alarm.py`: `a6c83df75b748e6a6ee398273aa8350ec5138c0f6cb64e77d6c31b1bf42ee3f4`
+ - `maps.json`: `52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d`
++- `evidence/hold_combo_action.json`: `87733a6ccf0950203f00fe42919d71758475dc88feb4979be55edc00746f2d0e`
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/VERIFIED_HASHES.json v9.9.5-after/VERIFIED_HASHES.json
+--- v9.9.5-before/VERIFIED_HASHES.json	2026-09-13 17:22:56.000000000 +0000
++++ v9.9.5-after/VERIFIED_HASHES.json	2026-09-13 19:00:46.557032054 +0000
+@@ -1,5 +1,5 @@
+ {
+-  "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
++  "spotify_recovered_core.py": "18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95",
+   "maple_nghia_pro.py": "8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48",
+   "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
+   "spotify_c2_runtime_support.py": "7eb2e8db0aa21aa71f3dce750e90370a5d602422c52a335dab26b8ea447235ed",
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/app_payload/evidence/hold_combo_action.json v9.9.5-after/app_payload/evidence/hold_combo_action.json
+--- v9.9.5-before/app_payload/evidence/hold_combo_action.json	2026-09-13 11:55:56.000000000 +0000
++++ v9.9.5-after/app_payload/evidence/hold_combo_action.json	2026-09-13 18:59:20.765613401 +0000
+@@ -1,16 +1,25 @@
+-{
+-  "feature": "hold_combo_action",
+-  "evidence_level": "direct-binary-plus-structural-call-reconstruction",
+-  "recovered_signature": ["direction", "flash_key", "skill_key", "hold_time"],
+-  "helper_hold_time_unit": "seconds",
+-  "teleport_to_skill_wait_seconds": [0.015, 0.045],
+-  "post_skill_wait_seconds": [0.125, 0.255],
+-  "simple_farm_window_seconds": [0.2, 0.5],
+-  "pirate_normal_farm_window_seconds": [0.2, 0.5],
+-  "pirate_normal_loot_sweep_seconds": 1.6,
+-  "pirate_one_hit_loot_sweep_seconds": 1.5,
+-  "active_callers": ["C1", "C2", "B1", "B3", "PIRATE2_NORMAL"],
+-  "one_hit_farm_uses_shared_combo": false,
+-  "dynamic_combo_active_for_these_callers": false,
+-  "pirate_laptop_in_scope": false
+-}
++{
++  "feature": "hold_combo_action",
++  "evidence_level": "high-structural-with-direct-global-timing-constants",
++  "recovered_signature": ["direction", "flash_key", "skill_key", "hold_time"],
++  "surviving_additional_locals": ["end_time"],
++  "helper_hold_time_unit": "seconds",
++  "inner_action_hold_ms": [50, 150],
++  "inner_action_hold_basis": "direct-global-attack-hold-constants-plus-structural-helper-shape",
++  "inner_action_hold_exact_source_recovery": false,
++  "random_move_gap_seconds": [0.015, 0.045],
++  "random_move_cycle_seconds": [0.125, 0.255],
++  "random_move_waits_rejected_for_hold_combo": true,
++  "dynamic_combo_spam_is_separate": true,
++  "dynamic_combo_spam_action_ms": [20, 50],
++  "dynamic_combo_spam_wait_seconds": [0.05, 0.15],
++  "simple_farm_window_seconds": [0.2, 0.5],
++  "pirate_normal_farm_window_seconds": [0.2, 0.5],
++  "pirate_normal_loot_sweep_seconds": 1.6,
++  "pirate_one_hit_loot_sweep_seconds": 1.5,
++  "active_callers": ["C1", "C2", "B1", "B3", "PIRATE2_NORMAL"],
++  "one_hit_farm_uses_shared_combo": false,
++  "dynamic_combo_active_for_these_callers": false,
++  "pirate_laptop_in_scope": false,
++  "reference_main_dll_sha256": "62860aeb8a80ac4a768aa8f3afafe23f079aa07e2981786e44989ad71b941cb0"
++}
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/app_payload/spotify_recovered_core.py v9.9.5-after/app_payload/spotify_recovered_core.py
+--- v9.9.5-before/app_payload/spotify_recovered_core.py	2026-09-13 12:27:26.000000000 +0000
++++ v9.9.5-after/app_payload/spotify_recovered_core.py	2026-09-13 18:58:22.315895671 +0000
+@@ -528,7 +528,14 @@
+             hold_ms=max(20, int(float(hold_time) * 1000.0)), combo_hold=True)
+ 
+     def _spotify_hold_combo_action(self, cfg, direction_key, flash_key, skill_key, hold_time):
+-        """Recovered Spotify tap-combo: keep direction, tap Flash then Skill."""
++        """Shared Spotify SIMPLE/Pirate hot helper: keep direction, Flash -> Skill.
++
++        Final V4 re-audit shows ``Farm.left_and_right`` imports this helper
++        directly, while the 0.015..0.045 / 0.125..0.255 waits belong to
++        ``random_move`` and must not be borrowed here.  The exact inner hold
++        distribution is not source-recoverable; the strongest direct timing
++        evidence for ordinary execute-key actions is ATTACK_HOLD_MIN/MAX.
++        """
+         skill_key = str(skill_key or "").strip()
+         flash_key = str(flash_key or "").strip() or None
+         if not skill_key:
+@@ -543,22 +550,25 @@
+             while time.monotonic() < end_time:
+                 if flash_key:
+                     did = bool(self._spotify_tap_combo(
+-                        cfg, direction_key, flash_key, role="TELEPORT")) or did
+-                    time.sleep(random.uniform(0.015, 0.045))
++                        cfg, direction_key, flash_key,
++                        hold_ms=random.randint(ATTACK_HOLD_MIN, ATTACK_HOLD_MAX),
++                        role="TELEPORT")) or did
+                 did = bool(self._spotify_tap_combo(
+-                    cfg, direction_key, skill_key, role="ATTACK")) or did
+-                time.sleep(random.uniform(0.125, 0.255))
++                    cfg, direction_key, skill_key,
++                    hold_ms=random.randint(ATTACK_HOLD_MIN, ATTACK_HOLD_MAX),
++                    role="ATTACK")) or did
+             return did
+         except Exception:
+             self._release_all_owned_inputs()
+             raise
+ 
+     def _spotify_c2_tp_skill_hold_combo(self, cfg, direction_key, skill_key, hold_time):
+-        """C2-only runtime candidate: 20..50 ms actions, 50..150 ms pair wait.
++        """Retained Dynamic-Combo SPAM candidate; not wired from SIMPLE maps.
+ 
+-        This path is intentionally isolated to C2 until same-machine A/B traces
+-        validate the candidate against Spotify. Other SIMPLE/Pirate callers keep
+-        the shared recovered hold-combo helper.
++        The 20..50 ms action / 50..150 ms wait block is real Spotify V4
++        evidence for the separate Dynamic Combo SPAM facility.  Final call-graph
++        re-audit does not prove that C2's Farm.left_and_right selects it, so
++        SIMPLE routing intentionally uses the shared hold_combo_action instead.
+         """
+         flash_key = str(cfg.get("tele_key") or "").strip()
+         skill_key = str(skill_key or "").strip()
+@@ -1690,15 +1700,13 @@
+         combo_ms = random.randint(*SPOTIFY_SIMPLE_HOLD_COMBO_MS)
+         flash_key = (str(cfg.get("tele_key") or "").strip()
+                      if bool(cfg.get("tele_enabled", True)) else "")
+-        current_map = str(cfg.get("current_map", "")).strip().upper()
+-        if current_map == "C2" and bool(cfg.get("spotify_runtime_parity_mode", True)):
+-            ok = self._spotify_c2_tp_skill_hold_combo(
+-                cfg, direction_key if direction_key else None, skill_key,
+-                combo_ms / 1000.0)
+-        else:
+-            ok = self._spotify_hold_combo_action(
+-                cfg, direction_key if direction_key else None, flash_key or None,
+-                skill_key, combo_ms / 1000.0)
++        # Final V4 call-graph re-audit: every SIMPLE profile, including C2,
++        # reaches the shared hold_combo_action imported by Farm.left_and_right.
++        # Dynamic Combo SPAM remains a separate facility and is not inferred from
++        # the C2 map name.
++        ok = self._spotify_hold_combo_action(
++            cfg, direction_key if direction_key else None, flash_key or None,
++            skill_key, combo_ms / 1000.0)
+ 
+         stamp = time.monotonic()
+         # The original loop's hold_combo_action supplies the cadence. Do not add a
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/review_report.md v9.9.5-after/review_report.md
+--- v9.9.5-before/review_report.md	2026-09-13 17:22:56.000000000 +0000
++++ v9.9.5-after/review_report.md	2026-09-13 19:00:46.558294726 +0000
+@@ -1,36 +1,35 @@
+-# V9.9.5 AllMapWorkerParity — Final Source Review
++# V9.9.5 AllMapWorkerParity + HotHelperCorrection — Final Source Review
+ 
+-## Intended change
++## Intended correction
+ 
+-V9.9.5 changes runtime ownership/topology while keeping recovered map timing/route code unchanged. One dedicated minimap-only `main_farm_worker` owns farm cadence for every recovered Spotify profile. The full-screen supervisor is kept for preview/UI/alerts/MiuMiu and is FPS-paced so it cannot become the cadence source. The final parity revision also scopes Nghia's two-frame minimap outlier extension back to C2, matching its V9.9.4 ownership instead of applying it to every profile.
++This pass corrects one forensic mapping error before stable publication. The final Spotify Offline V4 re-audit shows `Farm.left_and_right` importing/calling the shared `hold_combo_action` and does not show `perform_dynamic_combo` in that Farm module cluster. The previous candidate overreached by routing map C2 directly to the separate Dynamic Combo SPAM timing block.
++
++## Hot helper correction
++
++- C1, C2, B1 and B3 all remain SIMPLE and now share `_spotify_hold_combo_action`.
++- The C2-only routing branch to `_spotify_c2_tp_skill_hold_combo` was removed from `_spotify_primary_skill_step`.
++- `_spotify_c2_tp_skill_hold_combo` is retained only as a dormant representation of the separate Dynamic Combo SPAM facility so its real `20..50 ms` / `0.05..0.15 s` evidence is not lost.
++- Shared `hold_combo_action` no longer sleeps `0.015..0.045 s` between Flash and Skill or `0.125..0.255 s` after Skill. Those ranges are now explicitly documented as `random_move` timing only.
++- Shared Flash and Skill taps use the direct global `ATTACK_HOLD_MIN/MAX = 50..150 ms`. This is the strongest current structural hypothesis, not a claim of exact Python-source recovery.
+ 
+ ## Preserved behavior
+ 
+-- C1/B1/B3 continue to dispatch through the recovered `LEFT_RIGHT`/`run_left_and_right` path.
+-- C2 continues to use the V9.9.4 TP+Skill helper and cached-focus abort behavior.
+-- Bunny, Stand Still, Pirate2 and Pirate2 1-Hit continue through their existing dedicated recovered routes.
+-- Recovered timing catalog values and `spotify_recovered_core.py` are byte-identical to V9.9.4.
+-- Focus parity, MiuMiu, PC Alarm, maps.json and the Spotify dispatcher are byte-identical to V9.9.4.
+-- Main-farm stages remain `STATE -> SELL_SAFE -> PET -> RECOVERY -> BUFF1 -> BUFF2 -> DISPATCH`.
+-- Sell handoff still places the pause gate before spawning the asynchronous seller.
+-
+-## Position parity correction
+-
+-- V9.9.4 used `_c2_fast_observe_position()` only inside the C2 fast worker.
+-- The first V9.9.5 worker generalization unintentionally reused that outlier guard for every profile.
+-- The corrected V9.9.5 worker accepts detected positions immediately for C1/B1/B3, Bunny, Stand Still/C1 Stand Still, Pirate2 and Pirate2 1-Hit.
+-- C2 keeps the existing two-frame outlier guard as a Nghia stability extension; no C2 attack timing was changed.
+-- Regression coverage explicitly tests all eight non-C2 profile names plus C2 two-frame confirmation.
+-
+-## Ownership/safety review
+-
+-- Exact Spotify profiles have one farm owner: `Nghia-Spotify-MainFarm`.
+-- The worker hot loop consumes cached HWND state and contains no direct window enumeration or full-screen capture.
+-- Preview-only, sell lock, pause reason, unsupported profile, non-parity mode, missing cached HWND and worker exception all fail safe by releasing owned input.
+-- Supervisor does not call `spotify_main_farm_orchestrator.tick()`.
+-- If the worker is not alive, the supervisor may detect position for preview/context but does not regain farm ownership.
+-- STOP invalidates the worker generation before behavior-engine shutdown.
++- All-map dedicated main-farm worker ownership is unchanged.
++- Cached-focus worker architecture is unchanged; no direct EnumWindows/window lookup was reintroduced to the farm hot path.
++- C2's two-frame minimap outlier extension remains C2-only.
++- Bunny, Stand Still, Pirate2 and Pirate2 1-Hit route logic is unchanged.
++- `spotify_timing_catalog.py`, `spotify_behavior_engine.py`, `spotify_recovered_api.py`, `spotify_focus_parity.py`, MiuMiu, PC Alarm and `maps.json` remain byte-identical to the prior corrected V9.9.5 candidate.
++- Dynamic Combo SPAM remains available as a separate recovered API facility but is not inferred from the C2 map name.
++
++## Validation
++
++- New hot-helper tests were observed RED on the previous candidate and GREEN after the minimal correction.
++- Full local suite: 43/43 PASS.
++- `compileall`: PASS.
++- `spotify_recovered_core.py` SHA-256: `18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95`.
++- `maple_nghia_pro.py` SHA-256 remains `8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48`.
++- Reference Spotify `main.dll` SHA-256: `62860aeb8a80ac4a768aa8f3afafe23f079aa07e2981786e44989ad71b941cb0`.
+ 
+ ## Validation boundary
+ 
+-40 local pytest cases and compileall validate code structure and regressions. They are not a same-machine runtime A/B measurement against Spotify, and they are not a substitute for the Windows/Nuitka build + launcher smoke required before stable publication.
++This source correction is structurally better grounded than the previous C2-special candidate, but the exact shared inner hold distribution remains unresolved at source level. The 50..150 ms inner hold uses direct global Spotify constants plus helper shape and observed cadence as evidence. A fresh Windows/Nuitka build + launcher smoke and same-machine runtime A/B are still required before stable publication.
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/source_preflight_report.json v9.9.5-after/source_preflight_report.json
+--- v9.9.5-before/source_preflight_report.json	2026-09-13 17:22:56.000000000 +0000
++++ v9.9.5-after/source_preflight_report.json	2026-09-13 19:00:46.557344034 +0000
+@@ -1,10 +1,10 @@
+ {
+   "version": "9.9.5",
+-  "variant": "AllMapWorkerParity",
++  "variant": "AllMapWorkerParityHotHelperCorrection",
+   "artifact_kind": "full_source_candidate",
+   "base_candidate_version": "9.9.4",
+   "local_v995_tests": {
+-    "count": 40,
++    "count": 43,
+     "failures": 0,
+     "errors": 0,
+     "passed": true
+@@ -30,10 +30,10 @@
+     "BUFF2",
+     "DISPATCH"
+   ],
+-  "timing_policy": "No recovered per-map timing or route module was modified; the V9.9.5 revision only scopes the Nghia two-frame outlier extension back to C2.",
++  "timing_policy": "Final Spotify V4 re-audit corrected the shared hold_combo_action only: SIMPLE profiles now all use the shared helper; the misattributed random_move waits (0.015..0.045 / 0.125..0.255) are excluded; inner Flash/Skill holds use the direct global ATTACK_HOLD_MIN/MAX 50..150 ms as the strongest current structural hypothesis. Dynamic Combo SPAM 20..50 + 0.05..0.15 remains preserved as a separate dormant facility, not inferred from map C2.",
+   "final_source_hashes": {
+     "maple_nghia_pro.py": "8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48",
+-    "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
++    "spotify_recovered_core.py": "18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95",
+     "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
+     "spotify_c2_runtime_support.py": "7eb2e8db0aa21aa71f3dce750e90370a5d602422c52a335dab26b8ea447235ed"
+   },
+@@ -47,7 +47,6 @@
+     "maps.json": "52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d"
+   },
+   "protected_behavior": {
+-    "c1_c2_b1_b3_dispatch_unchanged": true,
+     "bunny_dispatch_unchanged": true,
+     "stand_still_dispatch_unchanged": true,
+     "pirate2_dispatch_unchanged": true,
+@@ -56,7 +55,8 @@
+     "focus_module_hash_protected": true,
+     "maps_hash_protected": true,
+     "miumiu_hash_protected": true,
+-    "pc_alarm_hash_protected": true
++    "pc_alarm_hash_protected": true,
++    "simple_dispatch_shared_hold_combo": true
+   },
+   "not_verified_in_this_environment": {
+     "windows_nuitka_build": true,
+@@ -73,5 +73,32 @@
+     "pirate2_1hit_direct_position_accept": true,
+     "c2_two_frame_outlier_extension_preserved": true,
+     "non_c2_large_relocation_requires_second_frame": false
++  },
++  "hot_helper_parity": {
++    "simple_profiles_use_shared_hold_combo": true,
++    "simple_profiles": [
++      "C1",
++      "C2",
++      "B1",
++      "B3"
++    ],
++    "dynamic_combo_spam_wired_from_simple": false,
++    "dynamic_combo_spam_preserved_separately": true,
++    "shared_inner_action_hold_ms": [
++      50,
++      150
++    ],
++    "shared_inner_action_hold_basis": "direct-global-attack-hold-constants-plus-structural-helper-shape",
++    "shared_inner_action_hold_exact_source_recovery": false,
++    "random_move_waits_used_by_shared_hold_combo": false,
++    "random_move_gap_s": [
++      0.015,
++      0.045
++    ],
++    "random_move_cycle_s": [
++      0.125,
++      0.255
++    ],
++    "reference_main_dll_sha256": "62860aeb8a80ac4a768aa8f3afafe23f079aa07e2981786e44989ad71b941cb0"
+   }
+ }
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/tests/test_c2_runtime_combo.py v9.9.5-after/tests/test_c2_runtime_combo.py
+--- v9.9.5-before/tests/test_c2_runtime_combo.py	2026-09-13 12:26:38.000000000 +0000
++++ v9.9.5-after/tests/test_c2_runtime_combo.py	2026-09-13 18:59:34.624636927 +0000
+@@ -20,15 +20,14 @@
+     assert "random.uniform" in body
+ 
+ 
+-def test_primary_skill_step_routes_only_c2_to_c2_runtime_helper():
++def test_primary_skill_step_routes_all_simple_profiles_to_shared_hold_combo():
+     source = (APP_PAYLOAD / "spotify_recovered_core.py").read_text(encoding="utf-8")
+     body = function_body(source, "_spotify_primary_skill_step")
+-    assert 'current_map' in body
+-    assert '"C2"' in body
+-    assert "_spotify_c2_tp_skill_hold_combo" in body
++    assert "_spotify_c2_tp_skill_hold_combo" not in body
+     assert "_spotify_hold_combo_action" in body
+     assert "SPOTIFY_SIMPLE_PRE_COMBO_SLEEP" in body
+     assert "SPOTIFY_SIMPLE_HOLD_COMBO_MS" in body
++    assert "flash_key or None" in body
+ 
+ 
+ def test_c2_skill_only_does_not_fall_back_to_shared_helper(monkeypatch):
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/tests/test_v995_hothelper_parity.py v9.9.5-after/tests/test_v995_hothelper_parity.py
+--- v9.9.5-before/tests/test_v995_hothelper_parity.py	1970-01-01 00:00:00.000000000 +0000
++++ v9.9.5-after/tests/test_v995_hothelper_parity.py	2026-09-13 18:59:07.422283258 +0000
+@@ -0,0 +1,108 @@
++from pathlib import Path
++import sys
++
++APP_PAYLOAD = Path(__file__).resolve().parents[1] / "app_payload"
++if str(APP_PAYLOAD) not in sys.path:
++    sys.path.insert(0, str(APP_PAYLOAD))
++
++
++def _core_with_host():
++    from spotify_recovered_core import SpotifyRecoveredCore
++
++    class Host:
++        pass
++
++    host = Host()
++    core = SpotifyRecoveredCore(host)
++    host.spotify_input_last_role = "IDLE"
++    host.spotify_scheduler_last_action = ""
++    host.spotify_primary_held_key = None
++    host.spotify_primary_skill_next = 0.0
++    host.spotify_primary_last_action = 0.0
++    host.current_move_key = "RIGHT"
++    host.release_move = lambda: None
++    host.set_move = lambda key: None
++    host._log = lambda msg: None
++    host._release_all_owned_inputs = lambda: None
++    return core, host
++
++
++def test_c2_simple_uses_shared_hold_combo_not_dynamic_spam_candidate(monkeypatch):
++    import spotify_recovered_core as core_module
++    from spotify_recovered_core import SpotifyRecoveredCore
++
++    core, host = _core_with_host()
++    calls = []
++
++    def shared(self, cfg, direction_key, flash_key, skill_key, hold_time):
++        calls.append((direction_key, flash_key, skill_key, hold_time))
++        return True
++
++    def c2_special(*args, **kwargs):
++        raise AssertionError("C2 SIMPLE must not route to the Dynamic-Combo SPAM candidate")
++
++    monkeypatch.setattr(SpotifyRecoveredCore, "_spotify_hold_combo_action", shared)
++    monkeypatch.setattr(SpotifyRecoveredCore, "_spotify_c2_tp_skill_hold_combo", c2_special)
++    monkeypatch.setattr(core_module.random, "random", lambda: 0.5)
++    monkeypatch.setattr(core_module.random, "randint", lambda lo, hi: lo)
++    monkeypatch.setattr(core_module.time, "sleep", lambda sec: None)
++    monkeypatch.setattr(core_module.time, "monotonic", lambda: 10.0)
++
++    cfg = {
++        "current_map": "C2",
++        "spotify_runtime_parity_mode": True,
++        "spotify_attack_key": "A",
++        "tele_key": "X",
++        "tele_enabled": True,
++    }
++    assert core._spotify_primary_skill_step(cfg, 10.0) is True
++    assert calls == [("RIGHT", "X", "A", 0.2)]
++
++
++def test_shared_hold_combo_uses_attack_hold_range_and_no_random_move_waits(monkeypatch):
++    import spotify_recovered_core as core_module
++    from spotify_recovered_core import ATTACK_HOLD_MIN, ATTACK_HOLD_MAX, SpotifyRecoveredCore
++
++    core, host = _core_with_host()
++    now = [0.0]
++    taps = []
++
++    def tap(self, cfg, direction_key, action_key, hold_ms=45, role="ACTION"):
++        taps.append((action_key, hold_ms, role))
++        # Model the real input primitive consuming time; enough to end after one pair.
++        now[0] += 0.11
++        return True
++
++    monkeypatch.setattr(SpotifyRecoveredCore, "_spotify_tap_combo", tap)
++    monkeypatch.setattr(core_module.time, "monotonic", lambda: now[0])
++    monkeypatch.setattr(core_module.random, "randint", lambda lo, hi: lo)
++    monkeypatch.setattr(
++        core_module.random,
++        "uniform",
++        lambda *args: (_ for _ in ()).throw(
++            AssertionError("shared hold_combo_action must not borrow random_move waits")
++        ),
++    )
++
++    assert core._spotify_hold_combo_action({}, "RIGHT", "X", "A", 0.2) is True
++    assert taps == [
++        ("X", ATTACK_HOLD_MIN, "TELEPORT"),
++        ("A", ATTACK_HOLD_MIN, "ATTACK"),
++    ]
++    assert ATTACK_HOLD_MIN == 50
++    assert ATTACK_HOLD_MAX == 150
++
++
++def test_hold_combo_evidence_does_not_misattribute_random_move_waits():
++    import json
++
++    evidence = json.loads((APP_PAYLOAD / "evidence" / "hold_combo_action.json").read_text(encoding="utf-8"))
++    assert evidence["inner_action_hold_ms"] == [50, 150]
++    assert evidence["inner_action_hold_basis"] == "direct-global-attack-hold-constants-plus-structural-helper-shape"
++    assert "teleport_to_skill_wait_seconds" not in evidence
++    assert "post_skill_wait_seconds" not in evidence
++    assert evidence["dynamic_combo_spam_is_separate"] is True
++
++    from spotify_timing_catalog import SPOTIFY_RECONSTRUCTED_54
++    assert SPOTIFY_RECONSTRUCTED_54["random_move"]["gap_s"] == (0.015, 0.045)
++    assert SPOTIFY_RECONSTRUCTED_54["random_move"]["cycle_s"] == (0.125, 0.255)
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/tests/test_v995_timing_guards.py v9.9.5-after/tests/test_v995_timing_guards.py
+--- v9.9.5-before/tests/test_v995_timing_guards.py	2026-09-13 16:18:02.000000000 +0000
++++ v9.9.5-after/tests/test_v995_timing_guards.py	2026-09-13 18:59:35.216131316 +0000
+@@ -7,7 +7,7 @@
+ sys.path.insert(0, str(APP_PAYLOAD))
+ 
+ PROTECTED = {
+-    "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
++    "spotify_recovered_core.py": "18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95",
+     "spotify_behavior_engine.py": "de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97",
+     "spotify_recovered_api.py": "1ceb0d194d1edfcab1a8005ac7fdd04343a90ff6962dc77d2dc675aac06a4339",
+     "spotify_timing_catalog.py": "b1eab666bc1227fbb420695ffcdc5ea97dde6880a49cc15b42b88aa1633c1066",
+@@ -22,7 +22,7 @@
+     return hashlib.sha256((APP_PAYLOAD / name).read_bytes()).hexdigest()
+ 
+ 
+-def test_v994_recovered_runtime_files_remain_byte_identical():
++def test_candidate_runtime_files_match_locked_hashes():
+     for name, expected in PROTECTED.items():
+         assert sha(name) == expected
+ 
