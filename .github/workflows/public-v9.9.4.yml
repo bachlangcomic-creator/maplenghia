@@ -100,6 +100,7 @@ jobs:
           '@ | python -
           gh release view v9.9.4 --repo $env:REPO *> $null
           if ($LASTEXITCODE -eq 0) { throw 'v9.9.4 release already exists; refusing duplicate publish' }
+          $global:LASTEXITCODE = 0
           Write-Host 'V994_NO_DUPLICATE_RELEASE_OK'
 
       - name: Download exact public V9.9.2 and V9.7 baselines
