@@ -83,13 +83,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'tests/metadata patch check failed' }
           git apply --directory=candidate $testmeta
           if ($LASTEXITCODE -ne 0) { throw 'tests/metadata patch apply failed' }
-          git apply --check -p1 --directory=candidate $outlier
+          git apply --check -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $outlier
           if ($LASTEXITCODE -ne 0) { throw 'outlier patch check failed' }
-          git apply -p1 --directory=candidate $outlier
+          git apply -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $outlier
           if ($LASTEXITCODE -ne 0) { throw 'outlier patch apply failed' }
-          git apply --check -p1 --directory=candidate $hot
+          git apply --check -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $hot
           if ($LASTEXITCODE -ne 0) { throw 'hothelper patch check failed' }
-          git apply -p1 --directory=candidate $hot
+          git apply -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $hot
           if ($LASTEXITCODE -ne 0) { throw 'hothelper patch apply failed' }
 
           @'
