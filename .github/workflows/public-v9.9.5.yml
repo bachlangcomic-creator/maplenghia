@@ -83,12 +83,12 @@ jobs:
           from zipfile import ZipFile
           import hashlib, json, shutil
           art=Path('artifact_in')
-          src=art/'NghiaClient_V9.9.5_HotHelperCorrection_Windows_Candidate.zip'
+          src=art/'out'/'NghiaClient_V9.9.5_HotHelperCorrection_Windows_Candidate.zip'
           if not src.exists(): raise SystemExit('candidate portable ZIP missing')
           got=hashlib.sha256(src.read_bytes()).hexdigest()
           want='e52d9485e2cbb8b602a728b46cc57194e2bc3c9ac41e2099241aade2d04199c0'
           if got != want: raise SystemExit(f'candidate portable hash mismatch {got} != {want}')
-          report=json.loads((art/'preflight_report.json').read_text(encoding='utf-8'))
+          report=json.loads((art/'out'/'preflight_report.json').read_text(encoding='utf-8'))
           expected={
               'version':'9.9.5','variant':'AllMapWorkerParityHotHelperCorrection',
               'tests':43,'failures':0,'errors':0,'compileall':True,'nuitka_build':True,
