@@ -1,0 +1,240 @@
+diff -ruN '--exclude=.git' '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/BUILD_STATUS.md v9.9.5-after/BUILD_STATUS.md
+--- v9.9.5-before/BUILD_STATUS.md	2026-09-13 16:23:36.000000000 +0000
++++ v9.9.5-after/BUILD_STATUS.md	2026-09-13 17:22:56.415090038 +0000
+@@ -5,12 +5,13 @@
+ - Generalized the dedicated minimap-only farm worker from C2 to every Spotify profile handled by the recovered dispatcher: C1/C2/B1/B3, Bunny, Stand Still/C1 Stand Still, Red-Nose Pirate Den 2, and Red-Nose Pirate Den 2 (1 Hit).
+ - The full-screen supervisor no longer owns farm cadence for exact Spotify profiles; it remains responsible for preview/UI/alert scanning and MiuMiu coordination.
+ - Worker liveness is separate from profile ownership: worker failure is fail-closed and does not hand farm input back to the supervisor.
+-- The worker uses the cached Spotify HWND, captures only the 300x250 minimap ROI, runs the existing player detector/outlier acceptance rules, and calls the seven-stage `SpotifyMainFarmOrchestrator` with owner `MAIN_FARM`.
++- The worker uses the cached Spotify HWND, captures only the 300x250 minimap ROI, runs the existing player detector, applies the two-frame outlier extension only for C2, and calls the seven-stage `SpotifyMainFarmOrchestrator` with owner `MAIN_FARM`.
+ - Existing focus-cache behavior remains unchanged. The farm worker performs no `_find_game_window`, `EnumWindows`, or full-screen `capture_screen` work in its hot loop.
++- Non-C2 profiles now consume detected minimap positions directly; the C2 two-frame outlier extension is preserved only for C2, restoring the pre-generalization scope.
+ - Existing recovered per-map timing/route modules are hash-locked and intentionally unchanged.
+ - Main-farm stage order remains `STATE -> SELL_SAFE -> PET -> RECOVERY -> BUFF1 -> BUFF2 -> DISPATCH`.
+ - MiuMiu atomic sell handoff, Recovery, Buff/Loot/Pet, PC Alarm, Adaptive Y defaults and maps.json coordinates remain unchanged.
+-- 31/31 candidate pytest tests pass locally.
++- 40/40 candidate pytest tests pass locally, including explicit non-C2 direct-position and C2 two-frame outlier-scope regression tests.
+ - Python `compileall` passes locally.
+ - Windows executables are NOT included in this source candidate until Windows/Nuitka build and launcher smoke are run.
+ - Stable `latest.json` was not modified.
+diff -ruN '--exclude=.git' '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/VERIFIED_HASHES.json v9.9.5-after/VERIFIED_HASHES.json
+--- v9.9.5-before/VERIFIED_HASHES.json	2026-09-13 16:27:16.000000000 +0000
++++ v9.9.5-after/VERIFIED_HASHES.json	2026-09-13 17:22:56.414739630 +0000
+@@ -1,6 +1,6 @@
+ {
+   "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
+-  "maple_nghia_pro.py": "b8ef87ea30fdb2551c176576fda734953236974b0df789cc32a8866d7956fc57",
++  "maple_nghia_pro.py": "8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48",
+   "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
+   "spotify_c2_runtime_support.py": "7eb2e8db0aa21aa71f3dce750e90370a5d602422c52a335dab26b8ea447235ed",
+   "spotify_behavior_engine.py": "de137e5486518d183e26b83d360fa4a164e0fd136ce1deef003d6ad7b953fe97",
+diff -ruN '--exclude=.git' '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/app_payload/maple_nghia_pro.py v9.9.5-after/app_payload/maple_nghia_pro.py
+--- v9.9.5-before/app_payload/maple_nghia_pro.py	2026-09-13 16:22:10.000000000 +0000
++++ v9.9.5-after/app_payload/maple_nghia_pro.py	2026-09-13 17:21:38.833568564 +0000
+@@ -2572,9 +2572,14 @@
+         except Exception:
+             return None
+ 
+-    def _spotify_main_farm_observe_position(self, pos, now):
+-        """Preserve V9.3's existing two-frame minimap outlier guard without
+-        changing SpotifyBehaviorEngine itself.
++    def _spotify_main_farm_observe_position(self, cfg, pos, now):
++        """Apply Nghia's two-frame minimap outlier guard only to C2.
++
++        V9.9.4 introduced this guard inside the C2-only fast worker. V9.9.5
++        generalized that worker to every Spotify profile, so carrying the guard
++        forward unconditionally changed Bunny/Stand/Pirate/SIMPLE position
++        semantics. Non-C2 profiles therefore consume the detected position
++        immediately; C2 preserves its existing stability extension.
+         """
+         engine = self.behavior_engine
+         now = float(now)
+@@ -2584,6 +2589,9 @@
+             engine.position_confidence = max(0.0, engine.position_confidence - 0.08)
+             return None
+ 
++        if str((cfg or {}).get("current_map", "")).strip().upper() != "C2":
++            return engine._accept_position(pos, now)
++
+         if engine.last_map_position is None or engine.last_detection_at <= 0.0:
+             return engine._accept_position(pos, now)
+ 
+@@ -2695,7 +2703,7 @@
+                 try:
+                     roi = self._capture_spotify_minimap_direct(cfg, local_mss, hwnd)
+                     raw_pos = self._detect_spotify_player_from_minimap(roi, cfg)
+-                    map_pos = self._spotify_main_farm_observe_position(raw_pos, time.monotonic())
++                    map_pos = self._spotify_main_farm_observe_position(cfg, raw_pos, time.monotonic())
+                     self.spotify_main_farm_last_map_pos = map_pos
+                     if map_pos is not None:
+                         self.spotify_main_farm_last_seen = time.monotonic()
+diff -ruN '--exclude=.git' '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/review_report.md v9.9.5-after/review_report.md
+--- v9.9.5-before/review_report.md	2026-09-13 16:22:56.000000000 +0000
++++ v9.9.5-after/review_report.md	2026-09-13 17:22:56.415034644 +0000
+@@ -2,7 +2,7 @@
+ 
+ ## Intended change
+ 
+-V9.9.5 changes runtime ownership/topology only. One dedicated minimap-only `main_farm_worker` now owns farm cadence for every recovered Spotify profile. The full-screen supervisor is kept for preview/UI/alerts/MiuMiu and is FPS-paced so it cannot become the cadence source.
++V9.9.5 changes runtime ownership/topology while keeping recovered map timing/route code unchanged. One dedicated minimap-only `main_farm_worker` owns farm cadence for every recovered Spotify profile. The full-screen supervisor is kept for preview/UI/alerts/MiuMiu and is FPS-paced so it cannot become the cadence source. The final parity revision also scopes Nghia's two-frame minimap outlier extension back to C2, matching its V9.9.4 ownership instead of applying it to every profile.
+ 
+ ## Preserved behavior
+ 
+@@ -14,6 +14,14 @@
+ - Main-farm stages remain `STATE -> SELL_SAFE -> PET -> RECOVERY -> BUFF1 -> BUFF2 -> DISPATCH`.
+ - Sell handoff still places the pause gate before spawning the asynchronous seller.
+ 
++## Position parity correction
++
++- V9.9.4 used `_c2_fast_observe_position()` only inside the C2 fast worker.
++- The first V9.9.5 worker generalization unintentionally reused that outlier guard for every profile.
++- The corrected V9.9.5 worker accepts detected positions immediately for C1/B1/B3, Bunny, Stand Still/C1 Stand Still, Pirate2 and Pirate2 1-Hit.
++- C2 keeps the existing two-frame outlier guard as a Nghia stability extension; no C2 attack timing was changed.
++- Regression coverage explicitly tests all eight non-C2 profile names plus C2 two-frame confirmation.
++
+ ## Ownership/safety review
+ 
+ - Exact Spotify profiles have one farm owner: `Nghia-Spotify-MainFarm`.
+@@ -25,4 +33,4 @@
+ 
+ ## Validation boundary
+ 
+-Local source tests and compileall validate code structure and regressions. They are not a same-machine runtime A/B measurement against Spotify, and they are not a substitute for the Windows/Nuitka build + launcher smoke required before stable publication.
++40 local pytest cases and compileall validate code structure and regressions. They are not a same-machine runtime A/B measurement against Spotify, and they are not a substitute for the Windows/Nuitka build + launcher smoke required before stable publication.
+diff -ruN '--exclude=.git' '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/source_preflight_report.json v9.9.5-after/source_preflight_report.json
+--- v9.9.5-before/source_preflight_report.json	2026-09-13 16:27:16.000000000 +0000
++++ v9.9.5-after/source_preflight_report.json	2026-09-13 17:22:56.414960503 +0000
+@@ -4,7 +4,7 @@
+   "artifact_kind": "full_source_candidate",
+   "base_candidate_version": "9.9.4",
+   "local_v995_tests": {
+-    "count": 31,
++    "count": 40,
+     "failures": 0,
+     "errors": 0,
+     "passed": true
+@@ -17,7 +17,9 @@
+     "worker_fullscreen_capture_call": false,
+     "worker_direct_window_enumeration": false,
+     "worker_failure_supervisor_fallback": false,
+-    "worker_yield_s": 0.001
++    "worker_yield_s": 0.001,
++    "non_c2_outlier_guard": false,
++    "c2_outlier_guard_preserved": true
+   },
+   "stage_order": [
+     "STATE",
+@@ -28,9 +30,9 @@
+     "BUFF2",
+     "DISPATCH"
+   ],
+-  "timing_policy": "No recovered per-map timing or route module was modified in V9.9.5.",
++  "timing_policy": "No recovered per-map timing or route module was modified; the V9.9.5 revision only scopes the Nghia two-frame outlier extension back to C2.",
+   "final_source_hashes": {
+-    "maple_nghia_pro.py": "b8ef87ea30fdb2551c176576fda734953236974b0df789cc32a8866d7956fc57",
++    "maple_nghia_pro.py": "8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48",
+     "spotify_recovered_core.py": "123175e47017d2133b6606335cb3d70ab38ea8d0407d3bb53a2e6d7fc37599bb",
+     "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
+     "spotify_c2_runtime_support.py": "7eb2e8db0aa21aa71f3dce750e90370a5d602422c52a335dab26b8ea447235ed"
+@@ -62,5 +64,14 @@
+     "same_machine_spotify_ab_runtime_trace": true
+   },
+   "runtime_ab_validated": false,
+-  "public_publish_performed": false
++  "public_publish_performed": false,
++  "position_parity_guards": {
++    "c1_b1_b3_direct_position_accept": true,
++    "bunny_direct_position_accept": true,
++    "stand_still_direct_position_accept": true,
++    "pirate2_direct_position_accept": true,
++    "pirate2_1hit_direct_position_accept": true,
++    "c2_two_frame_outlier_extension_preserved": true,
++    "non_c2_large_relocation_requires_second_frame": false
++  }
+ }
+diff -ruN '--exclude=.git' '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.pyc' v9.9.5-before/tests/test_v995_outlier_scope_parity.py v9.9.5-after/tests/test_v995_outlier_scope_parity.py
+--- v9.9.5-before/tests/test_v995_outlier_scope_parity.py	1970-01-01 00:00:00.000000000 +0000
++++ v9.9.5-after/tests/test_v995_outlier_scope_parity.py	2026-09-13 17:21:20.404601854 +0000
+@@ -0,0 +1,82 @@
++import os
++import sys
++import ctypes
++from collections import deque
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++sys.path.insert(0, str(APP_PAYLOAD))
++
++# Production is Windows-only. Provide the import-time user32 placeholder so this
++# narrow position-policy test can run on the source verification host.
++if not hasattr(ctypes, "windll"):
++    ctypes.windll = SimpleNamespace(user32=SimpleNamespace())
++
++from maple_nghia_pro import MapleNghiaPro
++from spotify_behavior_engine import SpotifyBehaviorEngine
++
++
++def make_host_with_position_state():
++    host = MapleNghiaPro.__new__(MapleNghiaPro)
++    engine = SpotifyBehaviorEngine.__new__(SpotifyBehaviorEngine)
++    engine.host = SimpleNamespace(last_tele_time=0.0, spotify_recovery_stage=0)
++    engine.last_map_position = (100.0, 100.0)
++    engine.last_detection_at = 1.0
++    engine.pending_jump = None
++    engine.pending_jump_count = 0
++    engine.rejected_position_jumps = 0
++    engine.position_confidence = 0.80
++    engine.position_streak = 3
++    engine.position_misses = 0
++    engine.position_history = deque([(100.0, 100.0)], maxlen=engine.POSITION_HISTORY)
++    host.behavior_engine = engine
++    return host, engine
++
++
++@pytest.mark.parametrize(
++    "current_map",
++    [
++        "C1",
++        "B1",
++        "B3",
++        "Bunny",
++        "Stand Still",
++        "C1 (Stand Still)",
++        "Red-Nose Pirate Den 2",
++        "Red-Nose Pirate Den 2 (1 Hit)",
++    ],
++)
++def test_non_c2_mainfarm_accepts_large_relocation_without_two_frame_guard(current_map):
++    host, engine = make_host_with_position_state()
++    cfg = {"current_map": current_map}
++
++    # A large vertical relocation would be rejected by Nghia's two-frame guard.
++    # Spotify parity for non-C2 must consume the detected position immediately.
++    result = host._spotify_main_farm_observe_position(cfg, (100.0, 190.0), 1.10)
++
++    assert result == (100.0, 190.0)
++    assert engine.last_map_position == (100.0, 190.0)
++    assert engine.pending_jump is None
++    assert engine.pending_jump_count == 0
++    assert engine.rejected_position_jumps == 0
++
++
++def test_c2_mainfarm_keeps_existing_two_frame_outlier_extension():
++    host, engine = make_host_with_position_state()
++    cfg = {"current_map": "C2"}
++
++    first = host._spotify_main_farm_observe_position(cfg, (100.0, 190.0), 1.10)
++    assert first is None
++    assert engine.last_map_position == (100.0, 100.0)
++    assert engine.pending_jump == (100.0, 190.0)
++    assert engine.pending_jump_count == 1
++    assert engine.rejected_position_jumps == 1
++
++    second = host._spotify_main_farm_observe_position(cfg, (100.0, 190.0), 1.20)
++    assert second == (100.0, 190.0)
++    assert engine.last_map_position == (100.0, 190.0)
++    assert engine.pending_jump is None
++    assert engine.pending_jump_count == 0
