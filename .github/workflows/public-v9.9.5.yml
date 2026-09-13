@@ -1,0 +1,287 @@
+name: Publish Nghia Client V9.9.5 HotHelperCorrection
+
+on:
+  push:
+    branches:
+      - release-v9.9.4-c2focus
+    paths:
+      - release_payload/v9.9.5/START_PUBLIC_BUILD
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  VERSION: '9.9.5'
+  CANDIDATE_RUN_ID: '34778934658'
+  CANDIDATE_HEAD_SHA: '33e8912e7a0fbaea837dafc21ac863b4212d5b22'
+  CANDIDATE_ARTIFACT_ID: '10325430325'
+  CANDIDATE_ARTIFACT_NAME: 'Nghia-V9.9.5-HotHelperCorrection-Windows-Candidate'
+  CANDIDATE_ARTIFACT_DIGEST: 'sha256:e5e14cf21cd1c5e5b379d7ede611892bba0ed09a0aa7e297680ec4ec499fa024'
+  CANDIDATE_PORTABLE_SHA256: 'e52d9485e2cbb8b602a728b46cc57194e2bc3c9ac41e2099241aade2d04199c0'
+  CORE_SHA256: '18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95'
+  HOST_SHA256: '8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48'
+
+jobs:
+  publish-stable:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout merged release branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python 3.12 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Gate current stable, candidate run, and duplicate release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64, json, subprocess
+          repo='bachlangcomic-creator/maplenghia'
+          raw=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          manifest=json.loads(base64.b64decode(raw['content']).decode('utf-8'))
+          assert manifest['version']=='9.9.2', manifest
+          assert manifest['channel']=='stable', manifest
+          assert manifest['sha256']=='39105c0e09914d656d7bae31878274074ff88601fdf0340f5d12cbda4830d626', manifest
+          print('V995_STABLE_BASE_MANIFEST_OK')
+          '@ | python -
+          gh release view v9.9.5 --repo $env:REPO *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v9.9.5 release already exists; refusing duplicate publish' }
+          $global:LASTEXITCODE = 0
+          $run=(gh api "repos/$env:REPO/actions/runs/$env:CANDIDATE_RUN_ID" | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) { throw 'candidate workflow run lookup failed' }
+          if ($run.status -ne 'completed' -or $run.conclusion -ne 'success') { throw "candidate run not successful: $($run.status)/$($run.conclusion)" }
+          if ($run.head_sha -ne $env:CANDIDATE_HEAD_SHA) { throw "candidate head SHA mismatch $($run.head_sha)" }
+          $arts=(gh api "repos/$env:REPO/actions/runs/$env:CANDIDATE_RUN_ID/artifacts" | ConvertFrom-Json)
+          if ($LASTEXITCODE -ne 0) { throw 'candidate artifact metadata lookup failed' }
+          $a=@($arts.artifacts | Where-Object { $_.id -eq [int64]$env:CANDIDATE_ARTIFACT_ID -and $_.name -eq $env:CANDIDATE_ARTIFACT_NAME })
+          if ($a.Count -ne 1) { throw 'exact candidate artifact not found' }
+          if ($a[0].expired) { throw 'candidate artifact expired' }
+          if ($a[0].digest -ne $env:CANDIDATE_ARTIFACT_DIGEST) { throw "candidate artifact digest mismatch $($a[0].digest)" }
+          Write-Host 'V995_EXACT_CANDIDATE_RUN_AND_ARTIFACT_OK'
+
+      - name: Download and verify exact Windows candidate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force artifact_in,portable,out,verify_release,update_stage | Out-Null
+          gh run download $env:CANDIDATE_RUN_ID --repo $env:REPO -n $env:CANDIDATE_ARTIFACT_NAME -D artifact_in
+          if ($LASTEXITCODE -ne 0) { throw 'candidate artifact download failed' }
+          @'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import hashlib, json, shutil
+          art=Path('artifact_in')
+          src=art/'NghiaClient_V9.9.5_HotHelperCorrection_Windows_Candidate.zip'
+          if not src.exists(): raise SystemExit('candidate portable ZIP missing')
+          got=hashlib.sha256(src.read_bytes()).hexdigest()
+          want='e52d9485e2cbb8b602a728b46cc57194e2bc3c9ac41e2099241aade2d04199c0'
+          if got != want: raise SystemExit(f'candidate portable hash mismatch {got} != {want}')
+          report=json.loads((art/'preflight_report.json').read_text(encoding='utf-8'))
+          expected={
+              'version':'9.9.5','variant':'AllMapWorkerParityHotHelperCorrection',
+              'tests':43,'failures':0,'errors':0,'compileall':True,'nuitka_build':True,
+              'windows_launcher_smoke':True,'packaged_launcher_smoke':True,
+              'portable_sha256':want,'public_publish_performed':False,
+          }
+          for k,v in expected.items():
+              if report.get(k) != v: raise SystemExit(f'candidate preflight mismatch {k}: {report.get(k)!r} != {v!r}')
+          with ZipFile(src) as z:
+              bad=[n for n in z.namelist() if '..' in Path(n).parts or n.startswith(('/', '\\'))]
+              if bad: raise SystemExit(f'unsafe candidate members: {bad[:3]}')
+              z.extractall('portable')
+          root=Path('portable')
+          ver=json.loads((root/'version.json').read_text(encoding='utf-8'))
+          if ver.get('version')!='9.9.5': raise SystemExit(ver)
+          checks={
+              'spotify_recovered_core.py':'18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95',
+              'maple_nghia_pro.py':'8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48',
+          }
+          for rel,want_hash in checks.items():
+              p=root/'app_payload'/rel
+              h=hashlib.sha256(p.read_bytes()).hexdigest()
+              if h != want_hash: raise SystemExit(f'payload hash mismatch {rel}: {h} != {want_hash}')
+          for d in ('__pycache__','.pytest_cache','dist_nuitka'):
+              if any(p.name==d for p in root.rglob('*')): raise SystemExit(f'forbidden cache/build dir in candidate: {d}')
+          if any(p.suffix=='.pyc' for p in root.rglob('*')): raise SystemExit('candidate contains .pyc')
+          shutil.copyfile(src,Path('out')/'NghiaClient_V9.9.5_Portable.zip')
+          print('V995_EXACT_WINDOWS_CANDIDATE_VERIFIED')
+          '@ | python -
+
+      - name: Real Windows launcher smoke from exact candidate
+        shell: pwsh
+        run: |
+          $root=(Resolve-Path 'portable').Path
+          $ud=Join-Path $root 'user_data'
+          New-Item -ItemType Directory -Force $ud | Out-Null
+          $crash=Join-Path $ud 'launcher_crash.log'
+          if (Test-Path $crash) { Remove-Item $crash -Force }
+          if (!(Test-Path (Join-Path $root 'NghiaLauncher.exe'))) { throw 'NghiaLauncher.exe missing' }
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3
+          $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V995_RELEASE_WINDOWS_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Build updater package and release preflight
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib, json, shutil
+          root=Path('portable')
+          stage=Path('update_stage')
+          shutil.rmtree(stage,ignore_errors=True)
+          (stage/'app_payload').mkdir(parents=True)
+          shutil.copytree(root/'app_payload',stage/'app_payload',dirs_exist_ok=True)
+          required=[
+            'NghiaClientApp.exe','nghia_spotify_nologin.py','maple_nghia_pro.py','spotify_recovered_core.py',
+            'spotify_recovered_api.py','spotify_behavior_engine.py','spotify_focus_parity.py','spotify_miumiu_sell.py','spotify_pc_alarm.py',
+            'spotify_detection_parity.py','spotify_watchdog.py','spotify_exact_assets.py','spotify_all_cure_assets.py',
+            'spotify_all_cure_executor.py','spotify_all_cure_market.py','spotify_main_farm_orchestrator.py','spotify_c2_runtime_support.py',
+            'evidence/disconnect_onl.json','evidence/sell_schedule.json','evidence/main_farm_worker.json',
+            'evidence/pirate_microtiming.json','evidence/all_cure_assets.json','evidence/all_cure_market.json',
+            'evidence/dynamic_combo_callers.json','evidence/hold_combo_action.json'
+          ]
+          for rel in required:
+              if not (stage/'app_payload'/rel).exists(): raise SystemExit('missing required update member '+rel)
+          (stage/'release.json').write_text(json.dumps({'payload_dir':'app_payload','required_files':required,'version':'9.9.5'},indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          if any('user_data' in p.parts for p in stage.rglob('*')): raise SystemExit('update stage contains user_data')
+          for d in ('__pycache__','.pytest_cache','dist_nuitka'):
+              if any(p.name==d for p in stage.rglob('*')): raise SystemExit(f'update stage contains {d}')
+          if any(p.suffix=='.pyc' for p in stage.rglob('*')): raise SystemExit('update stage contains .pyc')
+          out=Path('out'); out.mkdir(exist_ok=True)
+          uzip=out/'NghiaEdition_Update_v9.9.5.zip'
+          with ZipFile(uzip,'w',ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(stage.rglob('*')):
+                  if p.is_file(): z.write(p,p.relative_to(stage).as_posix())
+          pzip=out/'NghiaClient_V9.9.5_Portable.zip'
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          ph,uh=sha(pzip),sha(uzip)
+          if ph!='e52d9485e2cbb8b602a728b46cc57194e2bc3c9ac41e2099241aade2d04199c0': raise SystemExit('stable portable no longer matches exact verified candidate')
+          with ZipFile(uzip) as z:
+              names=z.namelist()
+              if 'release.json' not in names: raise SystemExit('release.json missing from updater')
+              if any(n.startswith('user_data/') for n in names): raise SystemExit('updater contains user_data')
+              if not all(('app_payload/'+rel) in names for rel in required): raise SystemExit('updater missing required payload files')
+          report={
+            'version':'9.9.5','variant':'AllMapWorkerParityHotHelperCorrection',
+            'tests':43,'failures':0,'errors':0,'compileall':True,'nuitka_build':True,
+            'windows_launcher_smoke':True,'packaged_launcher_smoke':True,
+            'portable_sha256':ph,'update_sha256':uh,
+            'candidate_run_id':34778934658,'candidate_artifact_id':10325430325,
+            'public_publish_performed':False
+          }
+          (out/'preflight_hashes.txt').write_text(f'NghiaClient_V9.9.5_Portable.zip {ph}\nNghiaEdition_Update_v9.9.5.zip {uh}\n',encoding='utf-8')
+          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(report,indent=2))
+          '@ | python -
+
+      - name: Create public stable V9.9.5 release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v9.9.5 --repo $env:REPO --target $env:GITHUB_SHA `
+            --title "Nghia Client v9.9.5 - AllMap Worker + HotHelper Parity" `
+            --notes "V9.9.5 promotes the verified AllMapWorkerParity HotHelperCorrection candidate to stable. Spotify-style main-farm ownership is shared across supported profiles; non-C2 profiles no longer inherit the C2 two-frame outlier guard. SIMPLE C1/C2/B1/B3 dispatch through shared hold_combo_action, while Dynamic Combo SPAM remains separate and dormant unless explicitly called. Shared Flash/Skill holds use ATTACK_HOLD_MIN/MAX 50-150 ms as the strongest current structural hypothesis. Cached focus, MiuMiu, PC Alarm, maps.json, updater safety, and recovered non-C2 timing remain protected. Source verification: 43/43 tests. Windows Nuitka build, raw launcher smoke, packaged launcher smoke, exact candidate hash verification, updater packaging, release-asset redownload verification, and latest.json-last publication are enforced." `
+            out/NghiaClient_V9.9.5_Portable.zip `
+            out/NghiaEdition_Update_v9.9.5.zip `
+            out/preflight_hashes.txt `
+            out/preflight_report.json
+          if ($LASTEXITCODE -ne 0) { throw 'public V9.9.5 release creation failed' }
+
+      - name: Redownload and verify public release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v9.9.5 --repo $env:REPO -p NghiaClient_V9.9.5_Portable.zip -p NghiaEdition_Update_v9.9.5.zip -D verify_release
+          if ($LASTEXITCODE -ne 0) { throw 'public V9.9.5 redownload failed' }
+          @'
+          from pathlib import Path
+          import hashlib,json
+          report=json.loads(Path('out/preflight_report.json').read_text(encoding='utf-8'))
+          def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+          checks={
+            'verify_release/NghiaClient_V9.9.5_Portable.zip':report['portable_sha256'],
+            'verify_release/NghiaEdition_Update_v9.9.5.zip':report['update_sha256'],
+          }
+          for p,want in checks.items():
+              got=sha(p)
+              if got != want: raise SystemExit(f'public release hash mismatch {p}: {got} != {want}')
+          print('V995_PUBLIC_ASSETS_VERIFIED')
+          '@ | python -
+
+      - name: Publish latest.json LAST
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64,json,subprocess
+          from pathlib import Path
+          repo='bachlangcomic-creator/maplenghia'
+          report=json.loads(Path('out/preflight_report.json').read_text(encoding='utf-8'))
+          current=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          existing=json.loads(base64.b64decode(current['content']).decode('utf-8'))
+          if existing.get('version') != '9.9.2': raise SystemExit(f"latest.json changed unexpectedly before publish: {existing.get('version')}")
+          manifest={
+            'version':'9.9.5','channel':'stable',
+            'package_url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.5/NghiaEdition_Update_v9.9.5.zip',
+            'url':'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.5/NghiaEdition_Update_v9.9.5.zip',
+            'sha256':report['update_sha256'],'payload_dir':'app_payload','min_launcher_version':'1.0.1',
+            'notes':'V9.9.5 AllMapWorkerParity + HotHelperCorrection. SIMPLE profiles use shared hold_combo_action; C2-only outlier guard stays scoped to C2; Dynamic Combo SPAM remains separate.'
+          }
+          raw=(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n').encode('utf-8')
+          payload=json.dumps({'message':'release: point stable latest.json to V9.9.5','content':base64.b64encode(raw).decode('ascii'),'sha':current['sha'],'branch':'main'})
+          subprocess.run(['gh','api','--method','PUT',f'repos/{repo}/contents/latest.json','--input','-'],input=payload,text=True,check=True)
+          print('V995_LATEST_JSON_PUBLISHED_LAST')
+          '@ | python -
+
+      - name: Verify public stable release and manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import base64,json,subprocess
+          from pathlib import Path
+          repo='bachlangcomic-creator/maplenghia'
+          report=json.loads(Path('out/preflight_report.json').read_text(encoding='utf-8'))
+          data=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/contents/latest.json?ref=main'],text=True))
+          manifest=json.loads(base64.b64decode(data['content']).decode('utf-8'))
+          assert manifest['version']=='9.9.5'
+          assert manifest['channel']=='stable'
+          assert manifest['sha256']==report['update_sha256']
+          assert manifest['package_url'].endswith('/v9.9.5/NghiaEdition_Update_v9.9.5.zip')
+          rel=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/releases/tags/v9.9.5'],text=True))
+          assert rel['draft'] is False and rel['prerelease'] is False
+          assets={a['name']:a for a in rel['assets']}
+          for name in ('NghiaClient_V9.9.5_Portable.zip','NghiaEdition_Update_v9.9.5.zip','preflight_hashes.txt','preflight_report.json'):
+              assert name in assets and assets[name]['state']=='uploaded', name
+          print('V995_PUBLIC_RELEASE_AND_MANIFEST_VERIFIED')
+          '@ | python -
