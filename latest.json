@@ -1,10 +1,10 @@
 {
-  "version": "9.9.1",
+  "version": "9.9.2",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.1/NghiaEdition_Update_v9.9.1.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.1/NghiaEdition_Update_v9.9.1.zip",
-  "sha256": "51d9abbb279684e06fb65ba0a075cda9b44d625b14ddd640f894eba53ce45366",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.2/NghiaEdition_Update_v9.9.2.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.2/NghiaEdition_Update_v9.9.2.zip",
+  "sha256": "39105c0e09914d656d7bae31878274074ff88601fdf0340f5d12cbda4830d626",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V9.9.1 All Cure Recovery + V9.9 forensic parity. All Cure workflow evidence is recovered; runtime requires the 12 external PNG templates to be imported before READY."
+  "notes": "V9.9.2 PirateParity + SpotifyRecoveredAPI. Pirate routes own their recovered loot schedules; recovered farm modes dispatch through SpotifyRecoveredAPI. Dynamic Combo remains dormant pending an evidenced Spotify caller."
 }
