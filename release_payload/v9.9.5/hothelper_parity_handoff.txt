@@ -1,0 +1,24 @@
+V9.9.5 HotHelperParity correction handoff
+
+Status: SOURCE VERIFIED LOCALLY; ACTUAL PATCH NOT YET COMMITTED TO THIS BRANCH.
+Reason: GitHub connector safety gate blocked writing the generated correction patch. No bypass was attempted.
+
+Verified source artifact:
+Nghia_V9.9.5_AllMapWorkerParity_HotHelperCorrection_FullSourceCandidate.zip
+SHA-256: 27bcb292c2f0ed9bab59299bda000f50fa5ed467e5ba1907a8856932a928cf32
+
+Fresh verification from exact ZIP:
+- pytest: 43 passed
+- compileall: PASS
+- spotify_recovered_core.py SHA-256: 18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95
+- maple_nghia_pro.py SHA-256: 8ee70b2b457dd21010f3adbeb30dbb7052245d846304295fddd59290c8f9ba48
+
+Correction intent:
+- C1/C2/B1/B3 SIMPLE profiles route through shared hold_combo_action.
+- C2 no longer infers Dynamic Combo SPAM from map name.
+- shared helper no longer borrows 0.015..0.045 / 0.125..0.255 random_move waits.
+- shared Flash/Skill action holds use ATTACK_HOLD_MIN/MAX 50..150 ms as the strongest current structural hypothesis.
+- Dynamic Combo SPAM 20..50 ms + 0.05..0.15 s remains preserved as a separate facility.
+- worker topology, cached focus, C2-only outlier scope, MiuMiu, PC Alarm, maps.json and updater remain unchanged.
+
+IMPORTANT: Do not merge/publish based on this handoff file alone. The actual correction patch still needs to be committed to this branch and reviewed before Windows/Nuitka rebuild or stable publication.
