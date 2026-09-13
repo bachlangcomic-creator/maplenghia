@@ -17,6 +17,7 @@ env:
   SOURCE_ASSET: Nghia_V9.9.4_C2FocusWorkerParity_FullSourceCandidate.zip
   SOURCE_SHA256: 77b0a3cfe379b0efe2d980b117b41171d437c6177fdfc05cd8c494c7d809542b
   PATCH_SHA256: 4c315ce041835d5c6837608d4f52bca2e7b3a876a731a8df8a00f0bbe06b4ac4
+  TESTMETA_PATCH_SHA256: 4d7dee21b6b45f82f8a016f395468f3c386095d00a206242b1adfe37f840d3d3
   BASE_PORTABLE_SHA256: 7359f223339bf857fcbe68c7df036d6857cfe7b81a49ce76d5a217001f8a10b4
 
 jobs:
@@ -48,7 +49,10 @@ jobs:
           if ($got -ne $env:SOURCE_SHA256) { throw "source hash mismatch $got" }
           $patch='release_payload/v9.9.5/v995_core.patch'
           $patchHash=(Get-FileHash $patch -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($patchHash -ne $env:PATCH_SHA256) { throw "patch hash mismatch $patchHash" }
+          if ($patchHash -ne $env:PATCH_SHA256) { throw "core patch hash mismatch $patchHash" }
+          $testmeta='release_payload/v9.9.5/v995_tests_metadata.patch'
+          $testmetaHash=(Get-FileHash $testmeta -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($testmetaHash -ne $env:TESTMETA_PATCH_SHA256) { throw "tests/metadata patch hash mismatch $testmetaHash" }
           Expand-Archive $asset -DestinationPath source_extract -Force
           $roots=@(Get-ChildItem source_extract -Directory)
           if ($roots.Count -ne 1) { throw "expected one source root, got $($roots.Count)" }
@@ -56,9 +60,13 @@ jobs:
           Push-Location candidate
           try {
             git apply --check ../release_payload/v9.9.5/v995_core.patch
-            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 patch check failed' }
+            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 core patch check failed' }
             git apply ../release_payload/v9.9.5/v995_core.patch
-            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 patch apply failed' }
+            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 core patch apply failed' }
+            git apply --check ../release_payload/v9.9.5/v995_tests_metadata.patch
+            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 tests/metadata patch check failed' }
+            git apply ../release_payload/v9.9.5/v995_tests_metadata.patch
+            if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 tests/metadata patch apply failed' }
           }
           finally { Pop-Location }
           @'
