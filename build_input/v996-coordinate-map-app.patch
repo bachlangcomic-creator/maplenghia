@@ -1,0 +1,244 @@
+--- a/app_payload/maple_nghia_pro.py
++++ b/app_payload/maple_nghia_pro.py
+@@ -86,6 +86,36 @@
+ MAPS_FILE = default_or_user_file("maps.json", Path(__file__).resolve().parent)
+ SPOTIFY_YELLOW_DOT_FILE = Path(__file__).resolve().parent / "spotify_yellow_dot.png"
+ 
++
++def build_simple_map_profile(left, right, safe, threshold=0.6):
++    """Build one SIMPLE maps.json profile from three detected minimap points."""
++    lx, ly = left
++    rx, ry = right
++    sx, sy = safe
++    return {
++        "FARM_TYPE": "SIMPLE",
++        "LEFT_X": int(round(float(lx))),
++        "LEFT_Y": int(round(float(ly))),
++        "RIGHT_X": int(round(float(rx))),
++        "RIGHT_Y": int(round(float(ry))),
++        "SAFE_PLACE_X": int(round(float(sx))),
++        "SAFE_PLACE_Y": int(round(float(sy))),
++        "CHAR_MATCH_THRESHOLD": float(threshold),
++    }
++
++
++def save_map_profile(target_path, maps_data, name, profile):
++    """Persist one profile without mutating the caller's maps dictionary."""
++    target = Path(target_path)
++    merged = dict(maps_data or {})
++    merged[str(name)] = dict(profile or {})
++    target.parent.mkdir(parents=True, exist_ok=True)
++    temp = target.with_name(target.name + ".tmp")
++    temp.write_text(json.dumps(merged, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
++    os.replace(temp, target)
++    return merged
++
++
+ # Exact constants decoded from spotify(3).exe Nuitka constant blob.
+ # The same blob encodes GAME_WIDTH=1280 and GAME_HEIGHT=720, confirming the
+ # unsigned-varint encoding; ATTACK_HOLD_MIN/MAX decode to 50/150 milliseconds.
+@@ -817,6 +847,11 @@
+             command=self._apply_map_profile
+         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 0))
+ 
++        ttk.Button(
++            f2, text="LẤY TỌA ĐỘ / THÊM MAP", style="Accent.TButton",
++            command=self.show_coordinate_map_builder
++        ).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
++
+         o3, card3 = self._card(right, "Phím Spotify Engine", "Chỉ cấu hình; Nghĩa không phát lệnh combat.")
+         o3.pack(fill="x")
+         f3 = tk.Frame(card3, bg=c["panel"])
+@@ -1995,6 +2030,192 @@
+         else:
+             messagebox.showwarning("Không tìm thấy", "Không thấy cửa sổ khớp với tiêu đề đã nhập.")
+ 
++    def show_coordinate_map_builder(self):
++        """Live minimap coordinate picker and SIMPLE maps.json profile writer."""
++        pop = tk.Toplevel(self)
++        pop.title("Lấy tọa độ nhân vật / Thêm map")
++        pop.geometry("520x500")
++        pop.resizable(False, False)
++        pop.configure(bg=self.COLORS["panel"])
++
++        tk.Label(
++            pop, text="Current Position", bg=self.COLORS["panel"],
++            fg=self.COLORS["text"], font=("Segoe UI", 11, "bold")
++        ).pack(pady=(16, 4))
++        current_value = tk.StringVar(value="X: --    Y: --")
++        tk.Label(
++            pop, textvariable=current_value, bg=self.COLORS["panel"],
++            fg=self.COLORS["accent"], font=("Consolas", 18, "bold")
++        ).pack(pady=(0, 4))
++        status_value = tk.StringVar(value="Đang tìm chấm vàng nhân vật trên minimap...")
++        tk.Label(
++            pop, textvariable=status_value, bg=self.COLORS["panel"],
++            fg=self.COLORS["muted"], font=("Segoe UI", 9), wraplength=460
++        ).pack(pady=(0, 10))
++
++        captured = {"LEFT": None, "RIGHT": None, "SAFE": None}
++        last_position = {"value": None}
++        slot_values = {
++            key: tk.StringVar(value=f"{key}: chưa lấy")
++            for key in ("LEFT", "RIGHT", "SAFE")
++        }
++
++        button_row = tk.Frame(pop, bg=self.COLORS["panel"])
++        button_row.pack(fill="x", padx=18, pady=(0, 8))
++
++        def capture_slot(slot):
++            pos = last_position["value"]
++            if pos is None:
++                messagebox.showwarning(
++                    "Chưa thấy nhân vật",
++                    "Chưa đọc được chấm vàng của nhân vật trên minimap.",
++                    parent=pop,
++                )
++                return
++            point = (int(pos[0]), int(pos[1]))
++            captured[slot] = point
++            slot_values[slot].set(f"{slot}: X={point[0]}  Y={point[1]}")
++            try:
++                self.clipboard_clear()
++                self.clipboard_append(f"{point[0]},{point[1]}")
++            except Exception:
++                pass
++
++        for idx, slot in enumerate(("LEFT", "RIGHT", "SAFE")):
++            ttk.Button(
++                button_row, text=f"Copy {slot}", style="Pro.TButton",
++                command=lambda s=slot: capture_slot(s)
++            ).grid(row=0, column=idx, sticky="ew", padx=4)
++            button_row.grid_columnconfigure(idx, weight=1)
++
++        slots_frame = tk.Frame(pop, bg=self.COLORS["panel2"], highlightthickness=1,
++                               highlightbackground=self.COLORS["line"])
++        slots_frame.pack(fill="x", padx=18, pady=(0, 12))
++        for slot in ("LEFT", "RIGHT", "SAFE"):
++            tk.Label(
++                slots_frame, textvariable=slot_values[slot], bg=self.COLORS["panel2"],
++                fg=self.COLORS["text"], font=("Consolas", 10), anchor="w"
++            ).pack(fill="x", padx=12, pady=4)
++
++        add_frame = tk.Frame(pop, bg=self.COLORS["panel"])
++        add_frame.pack(fill="x", padx=18)
++        tk.Label(
++            add_frame, text="Tên map mới", bg=self.COLORS["panel"],
++            fg=self.COLORS["text"], font=("Segoe UI", 9, "bold")
++        ).grid(row=0, column=0, sticky="w")
++        map_name = tk.StringVar(value="")
++        ttk.Entry(add_frame, textvariable=map_name, width=31).grid(
++            row=0, column=1, sticky="ew", padx=(8, 0)
++        )
++        add_frame.grid_columnconfigure(1, weight=1)
++
++        saved_value = tk.StringVar(value="")
++        tk.Label(
++            pop, textvariable=saved_value, bg=self.COLORS["panel"],
++            fg=self.COLORS["good"], font=("Segoe UI", 9, "bold"), wraplength=460
++        ).pack(padx=18, pady=(8, 0))
++
++        def add_map():
++            name = map_name.get().strip()
++            if not name:
++                messagebox.showwarning("Thiếu tên map", "Hãy nhập tên map mới.", parent=pop)
++                return
++            missing = [slot for slot, value in captured.items() if value is None]
++            if missing:
++                messagebox.showwarning(
++                    "Thiếu tọa độ",
++                    "Hãy lấy đủ LEFT, RIGHT và SAFE trước khi thêm map.",
++                    parent=pop,
++                )
++                return
++            if name in self.maps_data:
++                if not messagebox.askyesno(
++                    "Ghi đè map?",
++                    f"Map '{name}' đã tồn tại. Bạn có muốn ghi đè tọa độ không?",
++                    parent=pop,
++                ):
++                    return
++            try:
++                profile = build_simple_map_profile(
++                    captured["LEFT"], captured["RIGHT"], captured["SAFE"], 0.6
++                )
++                target = resolve_mutable_file(
++                    "maps.json", Path(__file__).resolve().parent
++                )
++                self.maps_data = save_map_profile(
++                    target, self.maps_data, name, profile
++                )
++                if hasattr(self, "map_combo"):
++                    self.map_combo.configure(values=self._spotify_map_names() or ["Mặc định"])
++                self.current_map.set(name)
++                self._apply_map_profile()
++                saved_value.set(
++                    f"Đã lưu {name}: LEFT {captured['LEFT']} • RIGHT {captured['RIGHT']} • SAFE {captured['SAFE']}"
++                )
++                self._log(f"[Map Builder] Đã thêm map '{name}' vào {target}")
++                messagebox.showinfo(
++                    "Đã thêm map",
++                    f"Đã lưu '{name}' vào maps.json và chọn map này trong tool.",
++                    parent=pop,
++                )
++            except Exception as exc:
++                self._log(f"[Map Builder] Lỗi lưu maps.json: {exc}")
++                messagebox.showerror(
++                    "Không thể lưu map", f"Lỗi: {exc}", parent=pop
++                )
++
++        ttk.Button(
++            pop, text="Add Map", style="Accent.TButton", command=add_map
++        ).pack(fill="x", padx=18, pady=(10, 0))
++
++        # Existing maps.json coordinates were captured under Spotify's recovered
++        # 1280x720 client invariant. Normalize once before probing while stopped so
++        # newly captured points use the same coordinate system as C1/C2/B1/B3.
++        if not self.running:
++            try:
++                self._spotify_setup_game_window(
++                    {"window_title": self.window_title.get().strip()}, force=True
++                )
++            except Exception:
++                pass
++
++        def update_position():
++            if not pop.winfo_exists():
++                return
++            pos = None
++            try:
++                if self.running and self.spotify_main_farm_last_map_pos is not None:
++                    pos = self.spotify_main_farm_last_map_pos
++                else:
++                    profile = self._spotify_effective_profile(self.current_map.get())
++                    threshold = float(profile.get("CHAR_MATCH_THRESHOLD", 0.6) or 0.6)
++                    cfg = {
++                        "window_title": self.window_title.get().strip(),
++                        "map_profile": {"CHAR_MATCH_THRESHOLD": threshold},
++                        "threshold": threshold,
++                    }
++                    hwnd, _ = self._find_game_window(cfg["window_title"])
++                    if hwnd:
++                        roi = self._capture_spotify_minimap_direct(cfg, hwnd=hwnd)
++                        pos = self._detect_spotify_player_from_minimap(roi, cfg)
++                if pos is not None:
++                    point = (int(round(float(pos[0]))), int(round(float(pos[1]))))
++                    last_position["value"] = point
++                    current_value.set(f"X: {point[0]}    Y: {point[1]}")
++                    status_value.set("Đã nhận diện nhân vật • đứng đúng vị trí rồi bấm Copy LEFT/RIGHT/SAFE")
++                else:
++                    last_position["value"] = None
++                    current_value.set("X: --    Y: --")
++                    status_value.set("Chưa thấy chấm vàng • mở minimap và kiểm tra cửa sổ MapleStory Worlds")
++            except Exception as exc:
++                last_position["value"] = None
++                current_value.set("X: --    Y: --")
++                status_value.set(f"Không đọc được tọa độ: {exc}")
++            if pop.winfo_exists():
++                pop.after(250, update_position)
++
++        update_position()
++
+     def show_position_popup(self):
+         pop = tk.Toplevel(self)
+         pop.title("Tọa độ chuột")
