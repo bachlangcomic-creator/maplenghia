@@ -1,0 +1,297 @@
+name: Build Nghia V9.9.5 NativeLootParity Candidate
+
+on:
+  push:
+    branches:
+      - fix-v9.9.5-native-loot-parity
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  SOURCE_TAG: v9.9.4-source-input
+  SOURCE_ASSET: Nghia_V9.9.4_C2FocusWorkerParity_FullSourceCandidate.zip
+  SOURCE_SHA256: 77b0a3cfe379b0efe2d980b117b41171d437c6177fdfc05cd8c494c7d809542b
+  CORE_PATCH_SHA256: 4c315ce041835d5c6837608d4f52bca2e7b3a876a731a8df8a00f0bbe06b4ac4
+  TESTMETA_PATCH_SHA256: 4d7dee21b6b45f82f8a016f395468f3c386095d00a206242b1adfe37f840d3d3
+  OUTLIER_PATCH_SHA256: 27fcd754ee2d9c57ff1a1da3f032ddc91e473efc331a4363e3baf429febd593b
+  HOTHELPER_PATCH_SHA256: 7d61e6fc28e3de2b45d99f2c890eb865ac2d5952023c0af85a785286983f69bc
+  NATIVE_LOOT_PATCH_SHA256: d52f1e31c4345e7262bfae39435922f615027237b4c7f84d0815929c7c5f9bcf
+  BASE_PORTABLE_SHA256: 7359f223339bf857fcbe68c7df036d6857cfe7b81a49ce76d5a217001f8a10b4
+  EXPECTED_MAPLE_SHA256: cec60e1575ed3ef05737acd2faf7eb2b42ca9fdcc6a5fb84c7ba169fe793c632
+  EXPECTED_CORE_SHA256: 18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95
+
+jobs:
+  windows-native-loot-parity:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Force deterministic LF checkout
+        shell: pwsh
+        run: |
+          git config core.autocrlf false
+          git config core.eol lf
+          git reset --hard HEAD
+
+      - name: Setup Python 3.12 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Reconstruct NativeLootParity V9.9.5 source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force source_in,source_extract,candidate,base,portable,out,verify | Out-Null
+          gh release download $env:SOURCE_TAG --repo $env:REPO -p $env:SOURCE_ASSET -D source_in
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.4 source asset download failed' }
+          $asset = Join-Path source_in $env:SOURCE_ASSET
+          $got=(Get-FileHash $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($got -ne $env:SOURCE_SHA256) { throw "source hash mismatch $got" }
+
+          $core='release_payload/v9.9.5/v995_core.patch'
+          $testmeta='release_payload/v9.9.5/v995_tests_metadata.patch'
+          $outlier='release_payload/v9.9.5/v995_outlier_scope.patch'
+          $hot='release_payload/v9.9.5/v995_hothelper_parity.patch'
+          $native='release_payload/v9.9.5/v995_native_loot_parity.patch'
+          $checks=@(
+            @($core,$env:CORE_PATCH_SHA256,'core'),
+            @($testmeta,$env:TESTMETA_PATCH_SHA256,'tests/metadata'),
+            @($outlier,$env:OUTLIER_PATCH_SHA256,'outlier'),
+            @($hot,$env:HOTHELPER_PATCH_SHA256,'hothelper'),
+            @($native,$env:NATIVE_LOOT_PATCH_SHA256,'native-loot')
+          )
+          foreach ($c in $checks) {
+            $h=(Get-FileHash $c[0] -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($h -ne $c[1]) { throw "$($c[2]) patch hash mismatch $h" }
+          }
+
+          Expand-Archive $asset -DestinationPath source_extract -Force
+          $roots=@(Get-ChildItem source_extract -Directory)
+          if ($roots.Count -ne 1) { throw "expected one source root, got $($roots.Count)" }
+          Copy-Item (Join-Path $roots[0].FullName '*') candidate -Recurse -Force
+
+          git apply --check --directory=candidate $core
+          git apply --directory=candidate $core
+          git apply --check --directory=candidate $testmeta
+          git apply --directory=candidate $testmeta
+          git apply --check -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $outlier
+          git apply -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $outlier
+          git apply --check -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $hot
+          git apply -p1 --directory=candidate --exclude='*/BUILD_STATUS.md' --exclude='*/review_report.md' $hot
+          git apply --check -p1 --directory=candidate $native
+          git apply -p1 --directory=candidate $native
+
+          $maple=(Get-FileHash candidate/app_payload/maple_nghia_pro.py -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($maple -ne $env:EXPECTED_MAPLE_SHA256) { throw "maple_nghia_pro hash mismatch $maple" }
+          $coreHash=(Get-FileHash candidate/app_payload/spotify_recovered_core.py -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($coreHash -ne $env:EXPECTED_CORE_SHA256) { throw "spotify_recovered_core hash mismatch $coreHash" }
+          if (!(Test-Path candidate/tests/test_v995_exact_loot_parity.py)) { throw 'NativeLootParity regression test missing' }
+          Write-Host 'V995_NATIVE_LOOT_SOURCE_RECONSTRUCTED_AND_VERIFIED'
+
+      - name: Prepare verified launcher baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v9.9.2 --repo $env:REPO -p NghiaClient_V9.9.2_Portable.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.2 portable download failed' }
+          $baseZip='base/NghiaClient_V9.9.2_Portable.zip'
+          $got=(Get-FileHash $baseZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($got -ne $env:BASE_PORTABLE_SHA256) { throw "baseline portable hash mismatch $got" }
+          Expand-Archive $baseZip -DestinationPath portable -Force
+          Remove-Item portable/app_payload -Recurse -Force
+          Copy-Item candidate/app_payload portable/app_payload -Recurse -Force
+          @'
+          from pathlib import Path
+          import json
+          Path('portable/version.json').write_text(json.dumps({'version':'9.9.5'},indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Install test and Nuitka dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: Compile and test NativeLootParity source
+        shell: pwsh
+        run: |
+          python -m compileall -q candidate/app_payload candidate/tests
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          $env:APP_PAYLOAD=(Resolve-Path candidate/app_payload).Path
+          $env:PYTHONPATH=(Resolve-Path candidate/app_payload).Path
+          pytest candidate/tests -v --junitxml=v995-native-loot-junit.xml
+          if ($LASTEXITCODE -ne 0) { throw 'V9.9.5 NativeLootParity tests failed' }
+          @'
+          import xml.etree.ElementTree as ET
+          root=ET.parse('v995-native-loot-junit.xml').getroot()
+          suite=root if root.tag=='testsuite' else root.find('testsuite')
+          if suite is None: raise SystemExit('unexpected JUnit root')
+          got=(int(suite.attrib.get('tests','0')),int(suite.attrib.get('failures','0')),int(suite.attrib.get('errors','0')))
+          if got != (45,0,0): raise SystemExit(f'unexpected test result {got}')
+          print('V995_NATIVE_LOOT_45_TESTS_OK')
+          '@ | python -
+
+      - name: Rebuild NghiaClientApp.exe with Nuitka
+        shell: pwsh
+        run: |
+          Push-Location portable/app_payload
+          try {
+            if (Test-Path dist_nuitka) { Remove-Item dist_nuitka -Recurse -Force }
+            python -m nuitka `
+              --onefile `
+              --assume-yes-for-downloads `
+              --windows-console-mode=disable `
+              --enable-plugin=tk-inter `
+              --include-package=customtkinter `
+              --include-package-data=customtkinter `
+              --include-module=client_paths `
+              --include-module=client_update_bridge `
+              --include-module=spotify_recovered_core `
+              --include-module=spotify_recovered_api `
+              --include-module=spotify_behavior_engine `
+              --include-module=spotify_focus_parity `
+              --include-module=spotify_detection_parity `
+              --include-module=spotify_watchdog `
+              --include-module=spotify_exact_assets `
+              --include-module=spotify_miumiu_sell `
+              --include-module=spotify_pc_alarm `
+              --include-module=spotify_all_cure_assets `
+              --include-module=spotify_all_cure_executor `
+              --include-module=spotify_all_cure_market `
+              --include-module=spotify_main_farm_orchestrator `
+              --include-module=spotify_c2_runtime_support `
+              --include-data-dir=spotify_miumiu=spotify_miumiu `
+              --include-data-dir=evidence=evidence `
+              --include-data-files=background.png=background.png `
+              --include-data-files=maps.json=maps.json `
+              --include-data-files=mushroom_icon.png=mushroom_icon.png `
+              --include-data-files=mushroom_icon.ico=mushroom_icon.ico `
+              --include-data-files=spotify_yellow_dot.png=spotify_yellow_dot.png `
+              --windows-icon-from-ico=mushroom_icon.ico `
+              --output-filename=NghiaClientApp.exe `
+              --output-dir=dist_nuitka `
+              nghia_spotify_nologin.py
+            if ($LASTEXITCODE -ne 0) { throw 'Nuitka build failed' }
+            if (!(Test-Path dist_nuitka/NghiaClientApp.exe)) { throw 'NghiaClientApp.exe missing' }
+            Copy-Item dist_nuitka/NghiaClientApp.exe NghiaClientApp.exe -Force
+          }
+          finally { Pop-Location }
+          @'
+          from pathlib import Path
+          exe=Path('portable/app_payload/NghiaClientApp.exe')
+          data=exe.read_bytes()
+          if not data.startswith(b'MZ'): raise SystemExit('not a PE/MZ executable')
+          for marker in (b'pyiboot01_bootstrap',b'_MEIPASS',b'PYZ-00.pyz'):
+              if marker in data: raise SystemExit(f'PyInstaller marker present: {marker!r}')
+          print('V995_NATIVE_LOOT_NUITKA_PE_OK', exe.stat().st_size)
+          '@ | python -
+
+      - name: Real Windows launcher smoke
+        shell: pwsh
+        run: |
+          $root=(Resolve-Path 'portable').Path
+          $ud=Join-Path $root 'user_data'
+          New-Item -ItemType Directory -Force $ud | Out-Null
+          $crash=Join-Path $ud 'launcher_crash.log'
+          if (Test-Path $crash) { Remove-Item $crash -Force }
+          if (!(Test-Path (Join-Path $root 'NghiaLauncher.exe'))) { throw 'NghiaLauncher.exe missing' }
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3
+          $app.Refresh()
+          if ($app.HasExited) { throw 'NghiaClientApp.exe exited during stability window' }
+          Write-Host "V995_NATIVE_LOOT_WINDOWS_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Package candidate artifact
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib, json, shutil
+          root=Path('portable')
+          shutil.rmtree(root/'app_payload'/'dist_nuitka',ignore_errors=True)
+          for d in list(root.rglob('__pycache__')): shutil.rmtree(d,ignore_errors=True)
+          for d in list(root.rglob('.pytest_cache')): shutil.rmtree(d,ignore_errors=True)
+          ud=root/'user_data'; ud.mkdir(exist_ok=True)
+          crash=ud/'launcher_crash.log'
+          if crash.exists(): crash.unlink()
+          (root/'version.json').write_text(json.dumps({'version':'9.9.5'},indent=2)+'\n',encoding='utf-8')
+          (ud/'update_status.json').write_text(json.dumps({'latest_version':'9.9.5','local_version':'9.9.5','notes':'V9.9.5 NativeLootParity Windows candidate','state':'up_to_date'},indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          out=Path('out'); out.mkdir(exist_ok=True)
+          dst=out/'NghiaClient_V9.9.5_NativeLootParity_Windows_Candidate.zip'
+          with ZipFile(dst,'w',ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file(): z.write(p,p.relative_to(root).as_posix())
+          sha=hashlib.sha256(dst.read_bytes()).hexdigest()
+          report={'version':'9.9.5','variant':'AllMapWorkerParityHotHelperCorrectionNativeLootParity','tests':45,'failures':0,'errors':0,'compileall':True,'nuitka_build':True,'windows_launcher_smoke':True,'packaged_launcher_smoke':False,'portable_sha256':sha,'maple_nghia_pro_sha256':'cec60e1575ed3ef05737acd2faf7eb2b42ca9fdcc6a5fb84c7ba169fe793c632','spotify_recovered_core_sha256':'18e164944d5842629af55ca0f70f274192421515c01ac6451c0bdedf13109d95','public_publish_performed':False}
+          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          (out/'preflight_hashes.txt').write_text(f'{sha}  {dst.name}\n',encoding='utf-8')
+          print('V995_NATIVE_LOOT_PACKAGE_OK', sha)
+          '@ | python -
+
+      - name: Packaged candidate launcher smoke
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V9.9.5_NativeLootParity_Windows_Candidate.zip -DestinationPath verify -Force
+          $root=(Resolve-Path 'verify').Path
+          $ud=Join-Path $root 'user_data'
+          $crash=Join-Path $ud 'launcher_crash.log'
+          if (Test-Path $crash) { Remove-Item $crash -Force }
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw 'packaged launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'packaged NghiaClientApp.exe did not start within 35 seconds' }
+          Start-Sleep -Seconds 3
+          $app.Refresh()
+          if ($app.HasExited) { throw 'packaged NghiaClientApp.exe exited during stability window' }
+          Write-Host "V995_NATIVE_LOOT_PACKAGED_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { throw 'packaged launcher_crash.log exists after smoke' }
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report.json')
+          report=json.loads(p.read_text(encoding='utf-8'))
+          report['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload Windows candidate artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V9.9.5-NativeLootParity-Windows-Candidate
+          path: |
+            out/NghiaClient_V9.9.5_NativeLootParity_Windows_Candidate.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
+            v995-native-loot-junit.xml
+          if-no-files-found: error
+          retention-days: 14

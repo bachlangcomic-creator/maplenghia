@@ -1,0 +1,123 @@
+diff --git a/app_payload/maple_nghia_pro.py b/app_payload/maple_nghia_pro.py
+index c0786d1..2cc46f7 100644
+--- a/app_payload/maple_nghia_pro.py
++++ b/app_payload/maple_nghia_pro.py
+@@ -3251,7 +3251,13 @@ class MapleNghiaPro(MapleVisionClient):
+         engine = self.behavior_engine
+         with engine.input_lock:
+             acted = bool(engine._dispatch_movement(cfg, map_pos, now))
+-            if engine._aux_allowed(cfg, now):
++            # Native-first Spotify V4 forensic pass found no evidence that the
++            # exact main-farm dispatcher injects a generic post-dispatch Loot
++            # action for SIMPLE/Bunny profiles. Keep the legacy auxiliary tail
++            # only outside exact runtime parity mode. Buff 1/2 already have
++            # dedicated pre-dispatch stages; Pirate/C1-Stand loot is route-owned.
++            exact_runtime = bool(cfg.get("spotify_runtime_parity_mode", True))
++            if not exact_runtime and engine._aux_allowed(cfg, now):
+                 engine.last_aux_tick_at = now
+                 acted = bool(engine.core._spotify_auxiliary_step(cfg, now)) or acted
+         engine._transition_state(engine._semantic_state(cfg, map_pos, now), now)
+diff --git a/tests/test_v995_exact_loot_parity.py b/tests/test_v995_exact_loot_parity.py
+new file mode 100644
+index 0000000..9a730a6
+--- /dev/null
++++ b/tests/test_v995_exact_loot_parity.py
+@@ -0,0 +1,98 @@
++import ast
++import os
++from contextlib import nullcontext
++from pathlib import Path
++
++APP_PAYLOAD = Path(os.environ["APP_PAYLOAD"])
++SOURCE = APP_PAYLOAD / "maple_nghia_pro.py"
++
++
++def load_dispatch_stage():
++    tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
++    method = None
++    for node in tree.body:
++        if isinstance(node, ast.ClassDef) and node.name == "MapleNghiaPro":
++            for child in node.body:
++                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name == "_spotify_mainfarm_dispatch_stage":
++                    method = child
++                    break
++    assert method is not None
++    module = ast.Module(body=[method], type_ignores=[])
++    ast.fix_missing_locations(module)
++    ns = {"STOP_TICK": "STOP_TICK", "CONTINUE": "CONTINUE"}
++    exec(compile(module, str(SOURCE), "exec"), ns)
++    return ns["_spotify_mainfarm_dispatch_stage"]
++
++
++DISPATCH_STAGE = load_dispatch_stage()
++
++
++class Core:
++    def __init__(self):
++        self.aux_calls = []
++
++    def _spotify_auxiliary_step(self, cfg, now):
++        self.aux_calls.append((dict(cfg), now))
++        return True
++
++
++class Engine:
++    def __init__(self):
++        self.input_lock = nullcontext()
++        self.core = Core()
++        self.last_aux_tick_at = 0.0
++        self.last_tick_at = 0.0
++        self.transitions = []
++
++    def _dispatch_movement(self, cfg, map_pos, now):
++        return False
++
++    def _aux_allowed(self, cfg, now):
++        return True
++
++    def _semantic_state(self, cfg, map_pos, now):
++        return "FARM"
++
++    def _transition_state(self, state, now):
++        self.transitions.append((state, now))
++
++
++class Host:
++    def __init__(self):
++        self.behavior_engine = Engine()
++        self.trace = []
++
++    def _c2_trace_emit(self, kind, **fields):
++        self.trace.append((kind, fields))
++
++
++def test_exact_parity_dispatch_does_not_run_speculative_post_dispatch_auxiliary():
++    host = Host()
++    cfg = {
++        "spotify_runtime_parity_mode": True,
++        "current_map": "C2",
++        "auto_loot": True,
++        "spotify_loot_enabled": True,
++        "loot_key": "Z",
++    }
++
++    DISPATCH_STAGE(host, cfg, (100.0, 170.0), 10.0, owner="MAIN_FARM")
++
++    assert host.behavior_engine.core.aux_calls == []
++    assert host.behavior_engine.last_aux_tick_at == 0.0
++
++
++def test_non_parity_dispatch_preserves_legacy_post_dispatch_auxiliary():
++    host = Host()
++    cfg = {
++        "spotify_runtime_parity_mode": False,
++        "current_map": "C2",
++        "auto_loot": True,
++        "spotify_loot_enabled": True,
++        "loot_key": "Z",
++    }
++
++    DISPATCH_STAGE(host, cfg, (100.0, 170.0), 10.0, owner="MAIN_FARM")
++
++    assert len(host.behavior_engine.core.aux_calls) == 1
++    assert host.behavior_engine.last_aux_tick_at == 10.0
