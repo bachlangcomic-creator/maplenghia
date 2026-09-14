@@ -1,0 +1,137 @@
+name: Publish Nghia V10.0.4 Korean OCR Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [build/v10.0.4-korean-ocr-fix]
+    paths:
+      - '.github/workflows/publish-v10.0.4-korean-ocr-fix.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Wait for verified V10.0.4 Windows build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run watch 34900048877 --repo bachlangcomic-creator/maplenghia --exit-status
+
+      - name: Download verified V10.0.4 artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          gh run download 34900048877 \
+            --repo bachlangcomic-creator/maplenghia \
+            --name Nghia-V10.0.4-Korean-OCR-Fix-Windows \
+            --dir publish
+          test -f publish/NghiaClient_V10.0.4_KoreanHelper_PortableOCR_Windows.zip
+          test -f publish/NghiaEdition_Update_v10.0.4.zip
+          test -f publish/korean_portable_preflight_v10.0.4.json
+          test -f publish/korean_portable_sha256_v10.0.4.txt
+
+      - name: Verify release payload hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r expected name; do
+            test -n "$expected"
+            test -f "publish/$name"
+            actual=$(sha256sum "publish/$name" | awk '{print $1}')
+            test "$expected" = "$actual"
+            echo "SHA256_OK $name $actual"
+          done < publish/korean_portable_sha256_v10.0.4.txt
+
+      - name: Publish GitHub release v10.0.4
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes='Korean OCR hotfix: fixes portable Tesseract discovery under Nuitka onefile. Bundles Tesseract with Korean/English tessdata, keeps the locked Farm/C1/C2/Loot core unchanged, and includes a launcher-compatible update package.'
+          if gh release view v10.0.4 --repo bachlangcomic-creator/maplenghia >/dev/null 2>&1; then
+            gh release upload v10.0.4 \
+              publish/NghiaClient_V10.0.4_KoreanHelper_PortableOCR_Windows.zip \
+              publish/NghiaEdition_Update_v10.0.4.zip \
+              publish/korean_portable_preflight_v10.0.4.json \
+              publish/korean_portable_sha256_v10.0.4.txt \
+              --repo bachlangcomic-creator/maplenghia --clobber
+          else
+            gh release create v10.0.4 \
+              publish/NghiaClient_V10.0.4_KoreanHelper_PortableOCR_Windows.zip \
+              publish/NghiaEdition_Update_v10.0.4.zip \
+              publish/korean_portable_preflight_v10.0.4.json \
+              publish/korean_portable_sha256_v10.0.4.txt \
+              --repo bachlangcomic-creator/maplenghia \
+              --target main \
+              --title 'Nghia Client v10.0.4 - Korean OCR Hotfix' \
+              --notes "$notes"
+          fi
+          gh release view v10.0.4 --repo bachlangcomic-creator/maplenghia
+
+      - name: Promote v10.0.4 to launcher latest.json
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          update_sha=$(grep 'NghiaEdition_Update_v10.0.4.zip$' publish/korean_portable_sha256_v10.0.4.txt | awk '{print $1}')
+          test ${#update_sha} -eq 64
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          python - "$update_sha" <<'PY'
+          import json, sys
+          from pathlib import Path
+          sha = sys.argv[1]
+          payload = {
+              'version': '10.0.4',
+              'channel': 'stable',
+              'package_url': 'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.4/NghiaEdition_Update_v10.0.4.zip',
+              'url': 'https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.4/NghiaEdition_Update_v10.0.4.zip',
+              'sha256': sha,
+              'payload_dir': 'app_payload',
+              'min_launcher_version': '1.0.1',
+              'notes': 'V10.0.4 Korean OCR hotfix. Fixes portable Tesseract discovery for the Nuitka onefile client; Tesseract + kor/eng data are bundled. Farm/C1/C2/Loot locked core remains unchanged.',
+          }
+          Path('latest.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add latest.json
+          if git diff --cached --quiet; then
+            echo 'latest.json already promoted'
+          else
+            git commit -m 'release: promote V10.0.4 Korean OCR hotfix'
+            git push origin main
+          fi
+
+      - name: Verify launcher manifest promotion
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/bachlangcomic-creator/maplenghia/contents/latest.json?ref=main --jq .content | tr -d '\n' | base64 -d > latest.remote.json
+          python - <<'PY'
+          import json
+          p=json.load(open('latest.remote.json',encoding='utf-8'))
+          assert p['version']=='10.0.4', p
+          assert p['package_url'].endswith('/v10.0.4/NghiaEdition_Update_v10.0.4.zip'), p
+          assert len(p['sha256'])==64, p
+          print('V1004_LAUNCHER_MANIFEST_PROMOTION_OK', p['sha256'])
+          PY
