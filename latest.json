@@ -1,10 +1,10 @@
 {
-  "version": "10.0.0",
+  "version": "10.0.1",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.0/NghiaEdition_Update_v10.0.0.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.0/NghiaEdition_Update_v10.0.0.zip",
-  "sha256": "b389ca6e99d4231c082a38c7aa1b4c1b151e711dc27d1cc3b10b36ede0cfdee2",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.1/NghiaEdition_Update_v10.0.1.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.1/NghiaEdition_Update_v10.0.1.zip",
+  "sha256": "cc463cc14884ffc7f4a4852e72a40c1725444c935326d50c0c6b96c5aefbfac1",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.0 Isolated Strategy Engine. New maps can opt into configurable Farm, Combat, Teleport and Loot strategies while legacy maps remain isolated on the existing behavior path."
+  "notes": "V10.0.1 Spotify Stability. Preserves C2 Adaptive Y and the existing B3 Adaptive Y behavior while preventing Spotify 3.0s reacquire and Nghia fallback recovery from firing in the same exact-parity tick. Strategy V10 and maps.json remain unchanged."
 }
