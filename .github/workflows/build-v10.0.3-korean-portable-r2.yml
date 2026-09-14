@@ -1,4 +1,4 @@
-name: Build Nghia V10.0.3 Korean Portable OCR R2
+name: Build Nghia V10.0.3 Korean Portable OCR R3
 
 on:
   workflow_dispatch:
@@ -6,6 +6,9 @@ on:
     branches: [build/v10.0.3-korean-portable]
     paths:
       - '.github/workflows/build-v10.0.3-korean-portable-r2.yml'
+      - 'build_input/apply_v1003_korean_portable.py'
+      - 'build_input/korean_payload/**'
+      - 'build_input/test_korean_onefile_locator.py'
 
 permissions:
   contents: read
@@ -58,6 +61,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
 
+      - name: Regression test Nuitka onefile OCR locator
+        shell: pwsh
+        run: python -m pytest -q build_input/test_korean_onefile_locator.py
+
       - name: Verify Korean helper source and locked core
         shell: pwsh
         run: |
@@ -70,7 +77,7 @@ jobs:
           def sha(name): return hashlib.sha256((root/name).read_bytes()).hexdigest()
           assert sha('maple_nghia_pro.py') == '020770a55f5f59b4be1ce07c8de28eee15019070146b593c23ed3a1d56349ea4'
           assert sha('nghia_spotify_nologin.py') == '43c4935952966297be4ed71cc159d744e3177ccc26a0e8027ff1f68350955ab1'
-          assert sha('korean_question_helper.py') == '94e422ca8a48d3133bd42cce064fb4beee59af27740b668dfc90f147fbcca0d5'
+          assert sha('korean_question_helper.py') == '605dd74d6d117825b44c3a5ed52b418a894563d6877f24dd62e727be25cf302e'
           assert 'pytesseract' in (root/'requirements.txt').read_text(encoding='utf-8')
           ui=(root/'nghia_spotify_nologin.py').read_text(encoding='utf-8')
           assert 'DỊCH CÂU HỎI HÀN' in ui
@@ -131,13 +138,14 @@ jobs:
               'variant':'KoreanHelperPortableOCR',
               'locked_core_sha256':'020770a55f5f59b4be1ce07c8de28eee15019070146b593c23ed3a1d56349ea4',
               'ui_sha256':'43c4935952966297be4ed71cc159d744e3177ccc26a0e8027ff1f68350955ab1',
-              'helper_sha256':'94e422ca8a48d3133bd42cce064fb4beee59af27740b668dfc90f147fbcca0d5',
+              'helper_sha256':'605dd74d6d117825b44c3a5ed52b418a894563d6877f24dd62e727be25cf302e',
               'bundled_tesseract':True,
               'bundled_kor_traineddata':True,
               'bundled_eng_traineddata':True,
               'runtime_download_required':False,
               'nuitka_onefile_client':True,
               'launcher_smoke':True,
+              'onefile_ocr_locator_regression_test':True,
               'portable_sha256':digest,
           }
           (out/'korean_portable_preflight.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
