@@ -105,3 +105,5 @@ jobs:
             out/NghiaEdition_Update_v10.0.3.zip
             out/preflight_report.json
             out/preflight_hashes.txt
+
+# rerun after LF-safe V10.0.3 transform fix
