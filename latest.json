@@ -1,10 +1,10 @@
 {
-  "version": "9.9.5",
+  "version": "9.9.6",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.5/NghiaEdition_Update_v9.9.5.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.5/NghiaEdition_Update_v9.9.5.zip",
-  "sha256": "58eff7b45608ecabfa7f560f12f327ddb6b7955e5c9478e08f683ebb69617108",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.6/NghiaEdition_Update_v9.9.6.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.6/NghiaEdition_Update_v9.9.6.zip",
+  "sha256": "e059701346abeaf0f1a2f3983275084131fc02a0ee4110813c6b973d67c458a6",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V9.9.5 AllMapWorkerParity + HotHelperCorrection. SIMPLE profiles use shared hold_combo_action; C2-only outlier guard stays scoped to C2; Dynamic Combo SPAM remains separate."
+  "notes": "V9.9.6 NativeLootParity. Exact Spotify parity removes speculative post-dispatch generic Loot for SIMPLE/Bunny while preserving legacy non-parity Auto Loot."
 }
