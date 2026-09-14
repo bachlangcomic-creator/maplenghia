@@ -1,0 +1,315 @@
+--- a/app_payload/maple_nghia_pro.py
++++ b/app_payload/maple_nghia_pro.py
+@@ -104,6 +104,37 @@
+     }
+ 
+ 
++def build_pirate_map_profile(
++    left, right, safe, loot_left, loot_right, loot_bot_1, loot_bot_2, threshold=0.6
++):
++    """Build one Pirate-route profile from captured farm and bottom-loot points."""
++    lx, ly = left
++    rx, ry = right
++    sx, sy = safe
++    llx, lly = loot_left
++    lrx, lry = loot_right
++    l1x, l1y = loot_bot_1
++    l2x, l2y = loot_bot_2
++    return {
++        "FARM_TYPE": "PIRATE_ROUTE",
++        "LEFT_X": int(round(float(lx))),
++        "LEFT_Y": int(round(float(ly))),
++        "RIGHT_X": int(round(float(rx))),
++        "RIGHT_Y": int(round(float(ry))),
++        "SAFE_PLACE_X": int(round(float(sx))),
++        "SAFE_PLACE_Y": int(round(float(sy))),
++        "LOOT_BOT_LEFT_X": int(round(float(llx))),
++        "LOOT_BOT_LEFT_Y": int(round(float(lly))),
++        "LOOT_BOT_RIGHT_X": int(round(float(lrx))),
++        "LOOT_BOT_RIGHT_Y": int(round(float(lry))),
++        "LOOT_BOT_1_X": int(round(float(l1x))),
++        "LOOT_BOT_1_Y": int(round(float(l1y))),
++        "LOOT_BOT_2_X": int(round(float(l2x))),
++        "LOOT_BOT_2_Y": int(round(float(l2y))),
++        "CHAR_MATCH_THRESHOLD": float(threshold),
++    }
++
++
+ def save_map_profile(target_path, maps_data, name, profile):
+     """Persist one profile without mutating the caller's maps dictionary."""
+     target = Path(target_path)
+@@ -2031,17 +2062,17 @@
+             messagebox.showwarning("Không tìm thấy", "Không thấy cửa sổ khớp với tiêu đề đã nhập.")
+ 
+     def show_coordinate_map_builder(self):
+-        """Live minimap coordinate picker and SIMPLE maps.json profile writer."""
++        """Live minimap coordinate picker for SIMPLE and Pirate-route map profiles."""
+         pop = tk.Toplevel(self)
+         pop.title("Lấy tọa độ nhân vật / Thêm map")
+-        pop.geometry("520x500")
++        pop.geometry("560x690")
+         pop.resizable(False, False)
+         pop.configure(bg=self.COLORS["panel"])
+ 
+         tk.Label(
+             pop, text="Current Position", bg=self.COLORS["panel"],
+             fg=self.COLORS["text"], font=("Segoe UI", 11, "bold")
+-        ).pack(pady=(16, 4))
++        ).pack(pady=(14, 4))
+         current_value = tk.StringVar(value="X: --    Y: --")
+         tk.Label(
+             pop, textvariable=current_value, bg=self.COLORS["panel"],
+@@ -2050,19 +2081,38 @@
+         status_value = tk.StringVar(value="Đang tìm chấm vàng nhân vật trên minimap...")
+         tk.Label(
+             pop, textvariable=status_value, bg=self.COLORS["panel"],
+-            fg=self.COLORS["muted"], font=("Segoe UI", 9), wraplength=460
+-        ).pack(pady=(0, 10))
++            fg=self.COLORS["muted"], font=("Segoe UI", 9), wraplength=500
++        ).pack(pady=(0, 8))
++
++        type_row = tk.Frame(pop, bg=self.COLORS["panel"])
++        type_row.pack(fill="x", padx=18, pady=(0, 8))
++        tk.Label(
++            type_row, text="Loại map", bg=self.COLORS["panel"],
++            fg=self.COLORS["text"], font=("Segoe UI", 9, "bold")
++        ).pack(side="left")
++        map_type = tk.StringVar(value="SIMPLE")
++        type_combo = ttk.Combobox(
++            type_row, textvariable=map_type, state="readonly",
++            values=("SIMPLE", "PIRATE ROUTE"), width=20,
++        )
++        type_combo.pack(side="left", padx=(10, 0))
+ 
+-        captured = {"LEFT": None, "RIGHT": None, "SAFE": None}
++        slot_labels = {
++            "LEFT": "LEFT",
++            "RIGHT": "RIGHT",
++            "SAFE": "SAFE",
++            "LOOT_LEFT": "LOOT LEFT",
++            "LOOT_RIGHT": "LOOT RIGHT",
++            "LOOT_BOT_1": "LOOT BOT 1",
++            "LOOT_BOT_2": "LOOT BOT 2",
++        }
++        captured = {key: None for key in slot_labels}
+         last_position = {"value": None}
+         slot_values = {
+-            key: tk.StringVar(value=f"{key}: chưa lấy")
+-            for key in ("LEFT", "RIGHT", "SAFE")
++            key: tk.StringVar(value=f"{label}: chưa lấy")
++            for key, label in slot_labels.items()
+         }
+ 
+-        button_row = tk.Frame(pop, bg=self.COLORS["panel"])
+-        button_row.pack(fill="x", padx=18, pady=(0, 8))
+-
+         def capture_slot(slot):
+             pos = last_position["value"]
+             if pos is None:
+@@ -2074,31 +2124,88 @@
+                 return
+             point = (int(pos[0]), int(pos[1]))
+             captured[slot] = point
+-            slot_values[slot].set(f"{slot}: X={point[0]}  Y={point[1]}")
++            slot_values[slot].set(
++                f"{slot_labels[slot]}: X={point[0]}  Y={point[1]}"
++            )
+             try:
+                 self.clipboard_clear()
+                 self.clipboard_append(f"{point[0]},{point[1]}")
+             except Exception:
+                 pass
+ 
++        tk.Label(
++            pop, text="FARM", bg=self.COLORS["panel"], fg=self.COLORS["muted"],
++            font=("Segoe UI", 9, "bold")
++        ).pack(anchor="w", padx=18, pady=(2, 4))
++
++        farm_buttons = tk.Frame(pop, bg=self.COLORS["panel"])
++        farm_buttons.pack(fill="x", padx=18, pady=(0, 6))
+         for idx, slot in enumerate(("LEFT", "RIGHT", "SAFE")):
+             ttk.Button(
+-                button_row, text=f"Copy {slot}", style="Pro.TButton",
++                farm_buttons, text=slot_labels[slot], style="Pro.TButton",
+                 command=lambda s=slot: capture_slot(s)
+             ).grid(row=0, column=idx, sticky="ew", padx=4)
+-            button_row.grid_columnconfigure(idx, weight=1)
++            farm_buttons.grid_columnconfigure(idx, weight=1)
+ 
+-        slots_frame = tk.Frame(pop, bg=self.COLORS["panel2"], highlightthickness=1,
+-                               highlightbackground=self.COLORS["line"])
+-        slots_frame.pack(fill="x", padx=18, pady=(0, 12))
++        farm_values = tk.Frame(
++            pop, bg=self.COLORS["panel2"], highlightthickness=1,
++            highlightbackground=self.COLORS["line"]
++        )
++        farm_values.pack(fill="x", padx=18, pady=(0, 10))
+         for slot in ("LEFT", "RIGHT", "SAFE"):
+             tk.Label(
+-                slots_frame, textvariable=slot_values[slot], bg=self.COLORS["panel2"],
++                farm_values, textvariable=slot_values[slot], bg=self.COLORS["panel2"],
++                fg=self.COLORS["text"], font=("Consolas", 10), anchor="w"
++            ).pack(fill="x", padx=12, pady=3)
++
++        pirate_host = tk.Frame(pop, bg=self.COLORS["panel"])
++        pirate_host.pack(fill="x", padx=18, pady=(0, 8))
++        pirate_frame = tk.Frame(pirate_host, bg=self.COLORS["panel"])
++
++        tk.Label(
++            pirate_frame, text="BOTTOM LOOT", bg=self.COLORS["panel"],
++            fg=self.COLORS["muted"], font=("Segoe UI", 9, "bold")
++        ).pack(anchor="w", pady=(0, 4))
++
++        pirate_buttons = tk.Frame(pirate_frame, bg=self.COLORS["panel"])
++        pirate_buttons.pack(fill="x", pady=(0, 6))
++        pirate_slots = ("LOOT_LEFT", "LOOT_RIGHT", "LOOT_BOT_1", "LOOT_BOT_2")
++        for idx, slot in enumerate(pirate_slots):
++            ttk.Button(
++                pirate_buttons, text=slot_labels[slot], style="Pro.TButton",
++                command=lambda s=slot: capture_slot(s)
++            ).grid(row=idx // 2, column=idx % 2, sticky="ew", padx=4, pady=3)
++        pirate_buttons.grid_columnconfigure(0, weight=1)
++        pirate_buttons.grid_columnconfigure(1, weight=1)
++
++        pirate_values = tk.Frame(
++            pirate_frame, bg=self.COLORS["panel2"], highlightthickness=1,
++            highlightbackground=self.COLORS["line"]
++        )
++        pirate_values.pack(fill="x")
++        for slot in pirate_slots:
++            tk.Label(
++                pirate_values, textvariable=slot_values[slot], bg=self.COLORS["panel2"],
+                 fg=self.COLORS["text"], font=("Consolas", 10), anchor="w"
+-            ).pack(fill="x", padx=12, pady=4)
++            ).pack(fill="x", padx=12, pady=3)
++
++        def sync_type_ui(_event=None):
++            if map_type.get() == "PIRATE ROUTE":
++                if not pirate_frame.winfo_manager():
++                    pirate_frame.pack(fill="x")
++                status_value.set(
++                    "Pirate Route: lấy LEFT/RIGHT/SAFE và đủ 4 điểm BOTTOM LOOT"
++                )
++            else:
++                if pirate_frame.winfo_manager():
++                    pirate_frame.pack_forget()
++                status_value.set("SIMPLE: lấy LEFT, RIGHT và SAFE")
++
++        type_combo.bind("<<ComboboxSelected>>", sync_type_ui)
++        sync_type_ui()
+ 
+         add_frame = tk.Frame(pop, bg=self.COLORS["panel"])
+-        add_frame.pack(fill="x", padx=18)
++        add_frame.pack(fill="x", padx=18, pady=(2, 0))
+         tk.Label(
+             add_frame, text="Tên map mới", bg=self.COLORS["panel"],
+             fg=self.COLORS["text"], font=("Segoe UI", 9, "bold")
+@@ -2112,7 +2219,7 @@
+         saved_value = tk.StringVar(value="")
+         tk.Label(
+             pop, textvariable=saved_value, bg=self.COLORS["panel"],
+-            fg=self.COLORS["good"], font=("Segoe UI", 9, "bold"), wraplength=460
++            fg=self.COLORS["good"], font=("Segoe UI", 9, "bold"), wraplength=500
+         ).pack(padx=18, pady=(8, 0))
+ 
+         def add_map():
+@@ -2120,14 +2227,20 @@
+             if not name:
+                 messagebox.showwarning("Thiếu tên map", "Hãy nhập tên map mới.", parent=pop)
+                 return
+-            missing = [slot for slot, value in captured.items() if value is None]
++
++            is_pirate = map_type.get() == "PIRATE ROUTE"
++            required = ["LEFT", "RIGHT", "SAFE"]
++            if is_pirate:
++                required.extend(["LOOT_LEFT", "LOOT_RIGHT", "LOOT_BOT_1", "LOOT_BOT_2"])
++            missing = [slot_labels[slot] for slot in required if captured[slot] is None]
+             if missing:
+                 messagebox.showwarning(
+                     "Thiếu tọa độ",
+-                    "Hãy lấy đủ LEFT, RIGHT và SAFE trước khi thêm map.",
++                    "Hãy lấy đủ: " + ", ".join(missing),
+                     parent=pop,
+                 )
+                 return
++
+             if name in self.maps_data:
+                 if not messagebox.askyesno(
+                     "Ghi đè map?",
+@@ -2136,9 +2249,16 @@
+                 ):
+                     return
+             try:
+-                profile = build_simple_map_profile(
+-                    captured["LEFT"], captured["RIGHT"], captured["SAFE"], 0.6
+-                )
++                if is_pirate:
++                    profile = build_pirate_map_profile(
++                        captured["LEFT"], captured["RIGHT"], captured["SAFE"],
++                        captured["LOOT_LEFT"], captured["LOOT_RIGHT"],
++                        captured["LOOT_BOT_1"], captured["LOOT_BOT_2"], 0.6,
++                    )
++                else:
++                    profile = build_simple_map_profile(
++                        captured["LEFT"], captured["RIGHT"], captured["SAFE"], 0.6
++                    )
+                 target = resolve_mutable_file(
+                     "maps.json", Path(__file__).resolve().parent
+                 )
+@@ -2152,10 +2272,17 @@
+                     self.map_menu.configure(values=values)
+                 self.current_map.set(name)
+                 self._apply_map_profile()
+-                saved_value.set(
+-                    f"Đã lưu {name}: LEFT {captured['LEFT']} • RIGHT {captured['RIGHT']} • SAFE {captured['SAFE']}"
++                if is_pirate:
++                    saved_value.set(
++                        f"Đã lưu Pirate Route {name}: FARM + 4 điểm BOTTOM LOOT"
++                    )
++                else:
++                    saved_value.set(
++                        f"Đã lưu SIMPLE {name}: LEFT {captured['LEFT']} • RIGHT {captured['RIGHT']} • SAFE {captured['SAFE']}"
++                    )
++                self._log(
++                    f"[Map Builder] Đã thêm map '{name}' ({map_type.get()}) vào {target}"
+                 )
+-                self._log(f"[Map Builder] Đã thêm map '{name}' vào {target}")
+                 messagebox.showinfo(
+                     "Đã thêm map",
+                     f"Đã lưu '{name}' vào maps.json và chọn map này trong tool.",
+@@ -2171,9 +2298,9 @@
+             pop, text="Add Map", style="Accent.TButton", command=add_map
+         ).pack(fill="x", padx=18, pady=(10, 0))
+ 
+-        # Existing maps.json coordinates were captured under Spotify's recovered
+-        # 1280x720 client invariant. Normalize once before probing while stopped so
+-        # newly captured points use the same coordinate system as C1/C2/B1/B3.
++        # Existing map coordinates use Spotify's recovered 1280x720 client invariant.
++        # Normalize once before probing while stopped so newly captured points use the
++        # same coordinate system as the bundled profiles.
+         if not self.running:
+             try:
+                 self._spotify_setup_game_window(
+@@ -2205,11 +2332,20 @@
+                     point = (int(round(float(pos[0]))), int(round(float(pos[1]))))
+                     last_position["value"] = point
+                     current_value.set(f"X: {point[0]}    Y: {point[1]}")
+-                    status_value.set("Đã nhận diện nhân vật • đứng đúng vị trí rồi bấm Copy LEFT/RIGHT/SAFE")
++                    if map_type.get() == "PIRATE ROUTE":
++                        status_value.set(
++                            "Đã nhận diện • đứng đúng điểm rồi bấm FARM hoặc BOTTOM LOOT tương ứng"
++                        )
++                    else:
++                        status_value.set(
++                            "Đã nhận diện • đứng đúng vị trí rồi bấm LEFT / RIGHT / SAFE"
++                        )
+                 else:
+                     last_position["value"] = None
+                     current_value.set("X: --    Y: --")
+-                    status_value.set("Chưa thấy chấm vàng • mở minimap và kiểm tra cửa sổ MapleStory Worlds")
++                    status_value.set(
++                        "Chưa thấy chấm vàng • mở minimap và kiểm tra cửa sổ MapleStory Worlds"
++                    )
+             except Exception as exc:
+                 last_position["value"] = None
+                 current_value.set("X: --    Y: --")

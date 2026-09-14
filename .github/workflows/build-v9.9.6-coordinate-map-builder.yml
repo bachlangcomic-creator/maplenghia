@@ -1,0 +1,66 @@
+name: Build Nghia V9.9.7 CoordinateMapBuilder Windows Candidate
+
+on:
+  push:
+    branches: [build-v9.9.7-coordinate-map-builder]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Prepare verified baseline
+        shell: pwsh
+        run: ./build_input/prepare_v997.ps1
+      - name: Promote to V9.9.7
+        shell: pwsh
+        run: python build_input/promote_v997.py
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt "nuitka>=2.7,<3" ordered-set zstandard
+      - name: Compile and feature test
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          python build_input/verify_v997_coordinate.py
+      - name: Build Windows exe
+        shell: pwsh
+        run: ./build_input/nuitka_v997.ps1
+      - name: Smoke Windows launcher
+        shell: pwsh
+        run: ./build_input/smoke_v997.ps1 -Root portable -Label V997_WINDOWS_LAUNCH
+      - name: Package V9.9.7
+        shell: pwsh
+        run: ./build_input/package_v997.ps1
+      - name: Smoke packaged candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V9.9.7_CoordinateMapBuilder_Windows_Candidate.zip -DestinationPath verify -Force
+          ./build_input/smoke_v997.ps1 -Root verify -Label V997_PACKAGED_LAUNCH
+          $r=Get-Content out/preflight_report.json -Raw | ConvertFrom-Json
+          $r.packaged_launcher_smoke=$true
+          $r | ConvertTo-Json | Set-Content -Encoding utf8 out/preflight_report.json
+      - name: Upload V9.9.7 Windows candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V9.9.7-CoordinateMapBuilder-Windows-Candidate
+          path: |
+            out/NghiaClient_V9.9.7_CoordinateMapBuilder_Windows_Candidate.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
+          if-no-files-found: error
+          retention-days: 14

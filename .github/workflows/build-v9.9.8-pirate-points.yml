@@ -1,0 +1,101 @@
+name: Build Nghia V9.9.8 Pirate Points Windows Candidate
+
+on:
+  push:
+    branches: [build-v9.9.8-pirate-points]
+    paths:
+      - '.github/workflows/build-v9.9.8-pirate-points.yml'
+      - 'build_input/apply_v998.py'
+      - 'build_input/apply_v998_windows.py'
+      - 'build_input/v998_prepare.ps1'
+      - 'build_input/v998_verify.py'
+      - 'build_input/v998_build.ps1'
+      - 'build_input/v998_smoke.ps1'
+      - 'build_input/v998_package.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V9.9.7 baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./build_input/v998_prepare.ps1
+
+      - name: RED guard
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          t=Path('portable/app_payload/maple_nghia_pro.py').read_text(encoding='utf-8')
+          assert 'def build_pirate_map_profile(' not in t
+          assert 'LOOT BOT 1' not in t and 'LOOT BOT 2' not in t
+          print('V998_RED_CONFIRMED')
+          '@ | python -
+
+      - name: Apply V9.9.8 source transform
+        shell: pwsh
+        run: python build_input/apply_v998_windows.py
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: GREEN feature tests and compile
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          python build_input/v998_verify.py
+
+      - name: Build Windows exe
+        shell: pwsh
+        run: ./build_input/v998_build.ps1
+
+      - name: Smoke Windows launcher
+        shell: pwsh
+        run: ./build_input/v998_smoke.ps1 -Root portable
+
+      - name: Package V9.9.8
+        shell: pwsh
+        run: python build_input/v998_package.py
+
+      - name: Smoke packaged candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V9.9.8_PiratePointsMapBuilder_Windows_Candidate.zip -DestinationPath verify -Force
+          ./build_input/v998_smoke.ps1 -Root verify
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report.json')
+          r=json.loads(p.read_text(encoding='utf-8'))
+          r['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(r,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload V9.9.8 Windows candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V9.9.8-PiratePointsMapBuilder-Windows-Candidate
+          path: |
+            out/NghiaClient_V9.9.8_PiratePointsMapBuilder_Windows_Candidate.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
+          if-no-files-found: error
+          retention-days: 14

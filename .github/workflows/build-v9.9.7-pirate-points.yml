@@ -1,0 +1,257 @@
+name: Build Nghia V9.9.7 Pirate Points MapBuilder Windows Candidate
+
+on:
+  push:
+    branches:
+      - build-v9.9.7-coordinate-map-builder
+    paths:
+      - '.github/workflows/build-v9.9.7-pirate-points.yml'
+      - 'build_input/v997-pirate-points-builder.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  REPO: bachlangcomic-creator/maplenghia
+  BASE_RUN_ID: '34842071204'
+  BASE_ARTIFACT: Nghia-V9.9.7-CoordinateMapBuilder-Windows-Candidate
+  BASE_ZIP: NghiaClient_V9.9.7_CoordinateMapBuilder_Windows_Candidate.zip
+  BASE_ZIP_SHA256: 5a499a62fbfb4d928af51cf5c83df59f5df4e8d6378cfc04067c8a779f7f0140
+  PATCH: build_input/v997-pirate-points-builder.patch
+  PATCH_SHA256: 16d7d2dcf95ff62aaac1f1412d126517021003f8dc8de17cfbce62dd1d17f7e3
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Download verified V9.9.7 baseline artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force baseline,portable,out,verify | Out-Null
+          gh run download $env:BASE_RUN_ID --repo $env:REPO -n $env:BASE_ARTIFACT -D baseline
+          if ($LASTEXITCODE -ne 0) { throw 'baseline artifact download failed' }
+          $zip = Join-Path baseline $env:BASE_ZIP
+          if (!(Test-Path $zip)) { throw 'baseline candidate zip missing' }
+          $got=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($got -ne $env:BASE_ZIP_SHA256) { throw "baseline zip hash mismatch $got" }
+          Expand-Archive $zip -DestinationPath portable -Force
+          if (!(Test-Path portable/app_payload/maple_nghia_pro.py)) { throw 'baseline source missing' }
+          Write-Host 'V997_PIRATE_POINTS_BASELINE_OK'
+
+      - name: RED guard against already-present feature
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          text=Path('portable/app_payload/maple_nghia_pro.py').read_text(encoding='utf-8')
+          if 'def build_pirate_map_profile(' in text:
+              raise SystemExit('RED guard failed: pirate profile helper already exists in baseline')
+          if 'LOOT BOT 1' in text or 'LOOT BOT 2' in text:
+              raise SystemExit('RED guard failed: pirate loot capture UI already exists in baseline')
+          print('V997_PIRATE_POINTS_RED_CONFIRMED')
+          '@ | python -
+
+      - name: Apply Pirate points MapBuilder patch
+        shell: pwsh
+        run: |
+          $patchHash=(Get-FileHash $env:PATCH -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($patchHash -ne $env:PATCH_SHA256) { throw "patch hash mismatch $patchHash" }
+          git apply --check --directory=portable $env:PATCH
+          if ($LASTEXITCODE -ne 0) { throw 'pirate points patch check failed' }
+          git apply --directory=portable $env:PATCH
+          if ($LASTEXITCODE -ne 0) { throw 'pirate points patch apply failed' }
+          Write-Host 'V997_PIRATE_POINTS_PATCH_OK'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: GREEN feature tests and compile
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          @'
+          import ast
+          from pathlib import Path
+          src=Path('portable/app_payload/maple_nghia_pro.py')
+          text=src.read_text(encoding='utf-8')
+          tree=ast.parse(text)
+          funcs={n.name:n for n in tree.body if isinstance(n,ast.FunctionDef)}
+          assert 'build_pirate_map_profile' in funcs
+          ns={}
+          mod=ast.Module(body=[funcs['build_pirate_map_profile']],type_ignores=[])
+          ast.fix_missing_locations(mod)
+          exec(compile(mod,str(src),'exec'),ns)
+          p=ns['build_pirate_map_profile'](
+              (84.4,189.2),(180.2,188.4),(155.1,172.2),
+              (80.4,196.2),(189.2,196.4),(105.2,201.1),(170.2,201.3),0.6)
+          expected={
+              'FARM_TYPE':'PIRATE_ROUTE',
+              'LEFT_X':84,'LEFT_Y':189,'RIGHT_X':180,'RIGHT_Y':188,
+              'SAFE_PLACE_X':155,'SAFE_PLACE_Y':172,
+              'LOOT_BOT_LEFT_X':80,'LOOT_BOT_LEFT_Y':196,
+              'LOOT_BOT_RIGHT_X':189,'LOOT_BOT_RIGHT_Y':196,
+              'LOOT_BOT_1_X':105,'LOOT_BOT_1_Y':201,
+              'LOOT_BOT_2_X':170,'LOOT_BOT_2_Y':201,
+              'CHAR_MATCH_THRESHOLD':0.6,
+          }
+          assert p==expected, (p,expected)
+          for token in ('PIRATE ROUTE','LOOT LEFT','LOOT RIGHT','LOOT BOT 1','LOOT BOT 2'):
+              assert token in text, token
+          ui=Path('portable/app_payload/nghia_spotify_nologin.py').read_text(encoding='utf-8')
+          assert 'LẤY TỌA ĐỘ / THÊM MAP' in ui
+          assert 'Nghia Edition V9.9.7' in ui
+          print('V997_PIRATE_POINTS_GREEN_OK')
+          '@ | python -
+
+      - name: Rebuild NghiaClientApp.exe with Nuitka
+        shell: pwsh
+        run: |
+          Push-Location portable/app_payload
+          try {
+            if (Test-Path dist_nuitka) { Remove-Item dist_nuitka -Recurse -Force }
+            python -m nuitka `
+              --onefile `
+              --assume-yes-for-downloads `
+              --windows-console-mode=disable `
+              --enable-plugin=tk-inter `
+              --include-package=customtkinter `
+              --include-package-data=customtkinter `
+              --include-module=client_paths `
+              --include-module=client_update_bridge `
+              --include-module=spotify_recovered_core `
+              --include-module=spotify_recovered_api `
+              --include-module=spotify_behavior_engine `
+              --include-module=spotify_focus_parity `
+              --include-module=spotify_detection_parity `
+              --include-module=spotify_watchdog `
+              --include-module=spotify_exact_assets `
+              --include-module=spotify_miumiu_sell `
+              --include-module=spotify_pc_alarm `
+              --include-module=spotify_all_cure_assets `
+              --include-module=spotify_all_cure_executor `
+              --include-module=spotify_all_cure_market `
+              --include-module=spotify_main_farm_orchestrator `
+              --include-module=spotify_c2_runtime_support `
+              --include-data-dir=spotify_miumiu=spotify_miumiu `
+              --include-data-dir=evidence=evidence `
+              --include-data-files=background.png=background.png `
+              --include-data-files=maps.json=maps.json `
+              --include-data-files=mushroom_icon.png=mushroom_icon.png `
+              --include-data-files=mushroom_icon.ico=mushroom_icon.ico `
+              --include-data-files=spotify_yellow_dot.png=spotify_yellow_dot.png `
+              --windows-icon-from-ico=mushroom_icon.ico `
+              --output-filename=NghiaClientApp.exe `
+              --output-dir=dist_nuitka `
+              nghia_spotify_nologin.py
+            if ($LASTEXITCODE -ne 0) { throw 'Nuitka build failed' }
+            if (!(Test-Path dist_nuitka/NghiaClientApp.exe)) { throw 'NghiaClientApp.exe missing' }
+            Copy-Item dist_nuitka/NghiaClientApp.exe NghiaClientApp.exe -Force
+          }
+          finally { Pop-Location }
+          $bytes=[IO.File]::ReadAllBytes('portable/app_payload/NghiaClientApp.exe')
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'not PE/MZ' }
+          Write-Host 'V997_PIRATE_POINTS_NUITKA_PE_OK'
+
+      - name: Smoke Windows launcher
+        shell: pwsh
+        run: |
+          $root=(Resolve-Path 'portable').Path
+          $ud=Join-Path $root 'user_data'; New-Item -ItemType Directory -Force $ud | Out-Null
+          $crash=Join-Path $ud 'launcher_crash.log'; if (Test-Path $crash) { Remove-Item $crash -Force }
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw 'launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'NghiaClientApp.exe did not start' }
+          Start-Sleep -Seconds 3; $app.Refresh(); if ($app.HasExited) { throw 'app exited during smoke' }
+          Write-Host "V997_PIRATE_POINTS_WINDOWS_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { throw 'launcher_crash.log exists after smoke' }
+
+      - name: Package V9.9.7 Pirate Points candidate
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import hashlib,json,shutil
+          root=Path('portable')
+          shutil.rmtree(root/'app_payload'/'dist_nuitka',ignore_errors=True)
+          for d in list(root.rglob('__pycache__')): shutil.rmtree(d,ignore_errors=True)
+          for d in list(root.rglob('.pytest_cache')): shutil.rmtree(d,ignore_errors=True)
+          ud=root/'user_data'; ud.mkdir(exist_ok=True)
+          crash=ud/'launcher_crash.log'
+          if crash.exists(): crash.unlink()
+          (root/'version.json').write_text(json.dumps({'version':'9.9.7'},indent=2)+'\n',encoding='utf-8')
+          (ud/'update_status.json').write_text(json.dumps({'latest_version':'9.9.7','local_version':'9.9.7','notes':'V9.9.7 Pirate Points MapBuilder candidate','state':'up_to_date'},indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          out=Path('out'); out.mkdir(exist_ok=True)
+          dst=out/'NghiaClient_V9.9.7_PiratePointsMapBuilder_Windows_Candidate.zip'
+          with ZipFile(dst,'w',ZIP_DEFLATED,compresslevel=9) as z:
+              for p in sorted(root.rglob('*')):
+                  if p.is_file(): z.write(p,p.relative_to(root).as_posix())
+          sha=hashlib.sha256(dst.read_bytes()).hexdigest()
+          report={'version':'9.9.7','variant':'PiratePointsMapBuilder','feature_scope':'capture_and_save_only','pirate_fields':['LEFT','RIGHT','SAFE','LOOT_BOT_LEFT','LOOT_BOT_RIGHT','LOOT_BOT_1','LOOT_BOT_2'],'engine_route_changed':False,'compileall':True,'feature_tests':True,'nuitka_build':True,'windows_launcher_smoke':True,'packaged_launcher_smoke':False,'portable_sha256':sha,'public_publish_performed':False}
+          (out/'preflight_report.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+          (out/'preflight_hashes.txt').write_text(f'{sha}  {dst.name}\n',encoding='utf-8')
+          print('V997_PIRATE_POINTS_PACKAGE_OK',sha)
+          '@ | python -
+
+      - name: Smoke packaged candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V9.9.7_PiratePointsMapBuilder_Windows_Candidate.zip -DestinationPath verify -Force
+          $root=(Resolve-Path 'verify').Path
+          $crash=Join-Path $root 'user_data/launcher_crash.log'; if (Test-Path $crash) { Remove-Item $crash -Force }
+          $lp=Start-Process -FilePath (Join-Path $root 'NghiaLauncher.exe') -WorkingDirectory $root -PassThru
+          $deadline=(Get-Date).AddSeconds(35); $app=$null
+          while ((Get-Date) -lt $deadline) {
+            $apps=@(Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)
+            if ($apps.Count -gt 0) { $app=$apps[0]; break }
+            if (Test-Path $crash) { Get-Content $crash; throw 'packaged launcher crash log created' }
+            Start-Sleep -Milliseconds 500
+          }
+          if ($null -eq $app) { throw 'packaged app did not start' }
+          Start-Sleep -Seconds 3; $app.Refresh(); if ($app.HasExited) { throw 'packaged app exited' }
+          Write-Host "V997_PIRATE_POINTS_PACKAGED_LAUNCH_OK PID=$($app.Id)"
+          @((Get-Process -Name NghiaClientApp -ErrorAction SilentlyContinue)) | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+          if (!$lp.HasExited) { Stop-Process -Id $lp.Id -Force -ErrorAction SilentlyContinue }
+          if (Test-Path $crash) { throw 'packaged launcher_crash.log exists' }
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report.json'); r=json.loads(.read_text(encoding='utf-8'))
+          r['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(r,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload V9.9.7 Pirate Points Windows candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V9.9.7-PiratePointsMapBuilder-Windows-Candidate
+          path: |
+            out/NghiaClient_V9.9.7_PiratePointsMapBuilder_Windows_Candidate.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
+          if-no-files-found: error
+          retention-days: 14
