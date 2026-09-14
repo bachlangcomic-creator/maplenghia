@@ -33,7 +33,11 @@ jobs:
 
       - name: Apply V10.0.2 canonical runtime
         shell: pwsh
-        run: python build_input/apply_v1002.py
+        run: |
+          git config core.autocrlf false
+          git config core.eol lf
+          git config core.safecrlf false
+          python build_input/apply_v1002.py
 
       - name: Install dependencies
         shell: pwsh
