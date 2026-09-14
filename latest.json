@@ -1,10 +1,10 @@
 {
-  "version": "10.0.4",
+  "version": "10.0.3",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.4/NghiaEdition_Update_v10.0.4.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.4/NghiaEdition_Update_v10.0.4.zip",
-  "sha256": "634e64a74c12e40c5e6ce00cc799101e8144fd738e3827a2cb4cbad16ed24b45",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.3/NghiaEdition_Update_v10.0.3.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.3/NghiaEdition_Update_v10.0.3.zip",
+  "sha256": "9167b43a15127bd351dc94bbe300ef31e18dd5d5b2152f8de4897435b021acb3",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.4 Korean OCR hotfix. Fixes portable Tesseract discovery for the Nuitka onefile client; Tesseract + kor/eng data are bundled. Farm/C1/C2/Loot locked core remains unchanged."
+  "notes": "V10.0.3 Loot Parity Defense. Adds a defense-in-depth invariant so exact Spotify parity refuses generic Loot for SIMPLE/Bunny-style routes even if an auxiliary caller reaches the core directly. Pirate route-owned Loot, TP/Skill timing, Adaptive Y, MiuMiu, Strategy V10 and maps behavior remain unchanged from V10.0.2."
 }
