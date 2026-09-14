@@ -1,0 +1,107 @@
+name: Build and Publish Nghia V10.0.3 Loot Parity Defense
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-v10.0.3-loot-parity-defense.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-publish-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V10.0.0 baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./build_input/v1001_prepare.ps1
+
+      - name: Reproduce verified V10.0.1 source
+        shell: pwsh
+        run: python build_input/apply_v1001.py
+
+      - name: Apply V10.0.2 canonical runtime
+        shell: pwsh
+        run: |
+          git config core.autocrlf false
+          git config core.eol lf
+          git config core.safecrlf false
+          python build_input/apply_v1002.py
+
+      - name: Apply V10.0.3 Loot parity defense
+        shell: pwsh
+        run: python build_input/apply_v1003.py
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: Verify source integrity and regression guards
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          python build_input/v1003_verify.py
+
+      - name: Build Windows exe
+        shell: pwsh
+        run: ./build_input/v1001_build.ps1
+
+      - name: Smoke Windows launcher
+        shell: pwsh
+        run: ./build_input/v1001_smoke.ps1 -Root portable
+
+      - name: Package V10.0.3
+        shell: pwsh
+        run: python build_input/v1003_package.py
+
+      - name: Smoke packaged candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V10.0.3_LootParityDefense_Windows_Candidate.zip -DestinationPath verify -Force
+          ./build_input/v1001_smoke.ps1 -Root verify
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report.json')
+          r=json.loads(p.read_text(encoding='utf-8'))
+          r['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(r,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V10.0.3-LootParityDefense-Windows
+          path: |
+            out/NghiaClient_V10.0.3_LootParityDefense_Windows_Candidate.zip
+            out/NghiaEdition_Update_v10.0.3.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v10.0.3
+          name: Nghia Client v10.0.3 - Loot Parity Defense
+          body_path: build_input/RELEASE_NOTES_v10.0.3.md
+          files: |
+            out/NghiaClient_V10.0.3_LootParityDefense_Windows_Candidate.zip
+            out/NghiaEdition_Update_v10.0.3.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
