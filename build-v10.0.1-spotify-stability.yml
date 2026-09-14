@@ -1,0 +1,101 @@
+name: Build Nghia V10.0.1 Spotify Stability Windows Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [build-v10.0.1-spotify-stability]
+    paths:
+      - '.github/workflows/build-v10.0.1-spotify-stability.yml'
+      - 'build_input/apply_v1001.py'
+      - 'build_input/v1001_prepare.ps1'
+      - 'build_input/v1001_verify.py'
+      - 'build_input/v1001_build.ps1'
+      - 'build_input/v1001_smoke.ps1'
+      - 'build_input/v1001_package.py'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V10.0.0 baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./build_input/v1001_prepare.ps1
+
+      - name: RED stability guard
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          root=Path('portable/app_payload')
+          core=(root/'spotify_recovered_core.py').read_text(encoding='utf-8')
+          maple=(root/'maple_nghia_pro.py').read_text(encoding='utf-8')
+          assert 'if lost_for >= max(SPOTIFY_R54_LOST_POSITION_LEFT_FLASH_UNTIL_S,' in core
+          assert 'self.c2_adaptive_y_enabled = tk.BooleanVar(value=True)' in maple
+          print('V1001_RED_CONFIRMED')
+          '@ | python -
+
+      - name: Apply V10.0.1 stability transform
+        shell: pwsh
+        run: python build_input/apply_v1001.py
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: GREEN stability and isolation tests
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          python build_input/v1001_verify.py
+
+      - name: Build Windows exe
+        shell: pwsh
+        run: ./build_input/v1001_build.ps1
+
+      - name: Smoke Windows launcher
+        shell: pwsh
+        run: ./build_input/v1001_smoke.ps1 -Root portable
+
+      - name: Package V10.0.1
+        shell: pwsh
+        run: python build_input/v1001_package.py
+
+      - name: Smoke packaged candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V10.0.1_SpotifyStability_Windows_Candidate.zip -DestinationPath verify -Force
+          ./build_input/v1001_smoke.ps1 -Root verify
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report.json')
+          r=json.loads(p.read_text(encoding='utf-8'))
+          r['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(r,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload V10.0.1 Windows candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V10.0.1-SpotifyStability-Windows-Candidate
+          path: |
+            out/NghiaClient_V10.0.1_SpotifyStability_Windows_Candidate.zip
+            out/preflight_report.json
+            out/preflight_hashes.txt
+          if-no-files-found: error
+          retention-days: 14
