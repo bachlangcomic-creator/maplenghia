@@ -1,10 +1,10 @@
 {
-  "version": "10.0.2",
+  "version": "10.0.3",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.2/NghiaEdition_Update_v10.0.2.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.2/NghiaEdition_Update_v10.0.2.zip",
-  "sha256": "d29cc97e9c7a2747da5890ae16c19f8cd5133e70973d3660cf64b5de53d25a48",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.3/NghiaEdition_Update_v10.0.3.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.3/NghiaEdition_Update_v10.0.3.zip",
+  "sha256": "9167b43a15127bd351dc94bbe300ef31e18dd5d5b2152f8de4897435b021acb3",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.2 Codex Canonical Stability. Uses Codex Fix 10.0.1 as the canonical Nghia runtime base, preserves the existing Spotify farm/combat behavior and Strategy V10, and fixes the WorkerSupervisor generation race while keeping Adaptive Y, revive, capture, Buff/Loot retry, MiuMiu and maps behavior unchanged from the validated base."
+  "notes": "V10.0.3 Loot Parity Defense. Adds a defense-in-depth invariant so exact Spotify parity refuses generic Loot for SIMPLE/Bunny-style routes even if an auxiliary caller reaches the core directly. Pirate route-owned Loot, TP/Skill timing, Adaptive Y, MiuMiu, Strategy V10 and maps behavior remain unchanged from V10.0.2."
 }
