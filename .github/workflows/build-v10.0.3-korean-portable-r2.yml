@@ -83,24 +83,22 @@ jobs:
         run: |
           ./build_input/v1003_korean_prepare_tesseract.ps1
           Push-Location portable/app_payload
-          try {
-            $env:TESSERACT_CMD=(Resolve-Path 'tesseract/tesseract.exe').Path
-            @'
-            from pathlib import Path
-            import pytesseract
-            import korean_question_helper as k
-            cmd=k._find_tesseract_cmd()
-            assert cmd and Path(cmd).name.lower() == 'tesseract.exe', cmd
-            tessdata=k.configure_tesseract_runtime(cmd)
-            assert Path(tessdata, 'kor.traineddata').is_file()
-            assert Path(tessdata, 'eng.traineddata').is_file()
-            pytesseract.pytesseract.tesseract_cmd=cmd
-            langs=set(pytesseract.get_languages(config=''))
-            assert {'kor','eng'} <= langs, langs
-            print('KOREAN_HELPER_PORTABLE_OCR_RUNTIME_OK', cmd, sorted(langs))
-            '@ | python -
-          }
-          finally { Pop-Location }
+          $env:TESSERACT_CMD=(Resolve-Path 'tesseract/tesseract.exe').Path
+          @'
+          from pathlib import Path
+          import pytesseract
+          import korean_question_helper as k
+          cmd=k._find_tesseract_cmd()
+          assert cmd and Path(cmd).name.lower() == 'tesseract.exe', cmd
+          tessdata=k.configure_tesseract_runtime(cmd)
+          assert Path(tessdata, 'kor.traineddata').is_file()
+          assert Path(tessdata, 'eng.traineddata').is_file()
+          pytesseract.pytesseract.tesseract_cmd=cmd
+          langs=set(pytesseract.get_languages(config=''))
+          assert {'kor','eng'} <= langs, langs
+          print('KOREAN_HELPER_PORTABLE_OCR_RUNTIME_OK', cmd, sorted(langs))
+          '@ | python -
+          Pop-Location
 
       - name: Build Windows onefile client with embedded Tesseract
         shell: pwsh
