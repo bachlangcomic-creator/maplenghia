@@ -1,10 +1,10 @@
 {
-  "version": "9.9.6",
+  "version": "10.0.0",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.6/NghiaEdition_Update_v9.9.6.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v9.9.6/NghiaEdition_Update_v9.9.6.zip",
-  "sha256": "e059701346abeaf0f1a2f3983275084131fc02a0ee4110813c6b973d67c458a6",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.0/NghiaEdition_Update_v10.0.0.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.0/NghiaEdition_Update_v10.0.0.zip",
+  "sha256": "b389ca6e99d4231c082a38c7aa1b4c1b151e711dc27d1cc3b10b36ede0cfdee2",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V9.9.6 NativeLootParity. Exact Spotify parity removes speculative post-dispatch generic Loot for SIMPLE/Bunny while preserving legacy non-parity Auto Loot."
+  "notes": "V10.0.0 Isolated Strategy Engine. New maps can opt into configurable Farm, Combat, Teleport and Loot strategies while legacy maps remain isolated on the existing behavior path."
 }
