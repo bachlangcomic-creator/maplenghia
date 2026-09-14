@@ -13,7 +13,7 @@ REQ = APP / "requirements.txt"
 
 BASE_UI_SHA = "61131ccedd816af3c375f583b4e806b620abcaf7c9a866e158e5c059e7ab03bd"
 LOCKED_CORE_SHA = "020770a55f5f59b4be1ce07c8de28eee15019070146b593c23ed3a1d56349ea4"
-FINAL_UI_SHA = "43c4935952966297be4ed71cc159d744e3177ccc26a0e8027ff1f68350955ab1"
+FINAL_UI_SHA = "6c131af3486dacf848eff9889eb83595774912f78ee70fb1185fb5a58799ec3b"
 HELPER_SHA = "605dd74d6d117825b44c3a5ed52b418a894563d6877f24dd62e727be25cf302e"
 REQ_SHA = "f0cf9eafb68704e1000b1e567b04252374ea6355c09b08decc49cfa67263498c"
 
@@ -34,7 +34,7 @@ def decode_parts(prefix: str) -> bytes:
 
 
 if sha(UI) != BASE_UI_SHA:
-    raise SystemExit(f"unexpected V10.0.3 UI: {sha(UI)}")
+    raise SystemExit(f"unexpected V10.0.3 baseline UI: {sha(UI)}")
 if sha(CORE) != LOCKED_CORE_SHA:
     raise SystemExit(f"locked core changed before Korean helper: {sha(CORE)}")
 
@@ -53,4 +53,4 @@ if sha(REQ) != REQ_SHA:
 if b"pytesseract" not in REQ.read_bytes():
     raise SystemExit("pytesseract missing from requirements")
 
-print("V1003_KOREAN_PORTABLE_APPLY_OK")
+print("V1004_KOREAN_OCR_FIX_APPLY_OK")
