@@ -1,0 +1,58 @@
+name: Publish Nghia V10.0.3 Korean Portable OCR
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [build/v10.0.3-korean-portable]
+    paths:
+      - '.github/workflows/publish-v10.0.3-korean-portable.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified Windows artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          gh run download 34894932483 \
+            --repo bachlangcomic-creator/maplenghia \
+            --name Nghia-V10.0.3-KoreanHelper-PortableOCR-Windows \
+            --dir publish
+          ls -lah publish
+
+      - name: Verify publish payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f publish/NghiaClient_V10.0.3_KoreanHelper_PortableOCR_Windows.zip
+          test -f publish/korean_portable_preflight.json
+          test -f publish/korean_portable_sha256.txt
+          expected=$(awk '{print $1}' publish/korean_portable_sha256.txt)
+          actual=$(sha256sum publish/NghiaClient_V10.0.3_KoreanHelper_PortableOCR_Windows.zip | awk '{print $1}')
+          test "$expected" = "$actual"
+          echo "PUBLISH_PAYLOAD_SHA256_OK $actual"
+
+      - name: Publish to v10.0.3 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v10.0.3 --repo bachlangcomic-creator/maplenghia >/dev/null
+          gh release upload v10.0.3 \
+            publish/NghiaClient_V10.0.3_KoreanHelper_PortableOCR_Windows.zip \
+            publish/korean_portable_preflight.json \
+            publish/korean_portable_sha256.txt \
+            --repo bachlangcomic-creator/maplenghia \
+            --clobber
+          echo 'V10.0.3_KOREAN_PORTABLE_RELEASE_UPLOAD_OK'
