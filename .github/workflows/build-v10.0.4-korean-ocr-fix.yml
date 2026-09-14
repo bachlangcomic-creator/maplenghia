@@ -1,0 +1,151 @@
+name: Build Nghia V10.0.4 Korean OCR Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [build/v10.0.4-korean-ocr-fix]
+    paths:
+      - '.github/workflows/build-v10.0.4-korean-ocr-fix.yml'
+      - 'build_input/apply_v1003_korean_portable.py'
+      - 'build_input/korean_payload/**'
+      - 'build_input/test_korean_onefile_locator.py'
+      - 'build_input/v1004_package_korean.py'
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V10.0.0 baseline
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./build_input/v1001_prepare.ps1
+
+      - name: Reproduce verified V10.0.1 source
+        shell: pwsh
+        run: python build_input/apply_v1001.py
+
+      - name: Apply V10.0.2 canonical runtime
+        shell: pwsh
+        run: |
+          git config core.autocrlf false
+          git config core.eol lf
+          git config core.safecrlf false
+          python build_input/apply_v1002.py
+
+      - name: Apply V10.0.3 Loot parity defense
+        shell: pwsh
+        run: python build_input/apply_v1003.py
+
+      - name: Verify untouched V10.0.3 locked baseline
+        shell: pwsh
+        run: python build_input/v1003_verify.py
+
+      - name: Apply V10.0.4 Korean OCR fix
+        shell: pwsh
+        run: python build_input/apply_v1003_korean_portable.py
+
+      - name: Install Python and build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: Regression test Nuitka onefile OCR locator
+        shell: pwsh
+        run: python -m pytest -q build_input/test_korean_onefile_locator.py
+
+      - name: Verify V10.0.4 source and locked core
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          @'
+          from pathlib import Path
+          import hashlib
+          root=Path('portable/app_payload')
+          def sha(name): return hashlib.sha256((root/name).read_bytes()).hexdigest()
+          assert sha('maple_nghia_pro.py') == '020770a55f5f59b4be1ce07c8de28eee15019070146b593c23ed3a1d56349ea4'
+          assert sha('nghia_spotify_nologin.py') == '6c131af3486dacf848eff9889eb83595774912f78ee70fb1185fb5a58799ec3b'
+          assert sha('korean_question_helper.py') == '605dd74d6d117825b44c3a5ed52b418a894563d6877f24dd62e727be25cf302e'
+          ui=(root/'nghia_spotify_nologin.py').read_text(encoding='utf-8')
+          assert 'Nghia Edition V10.0.4' in ui
+          assert 'DỊCH CÂU HỎI HÀN' in ui
+          assert 'F10' in ui
+          assert 'pytesseract' in (root/'requirements.txt').read_text(encoding='utf-8')
+          print('V1004_KOREAN_SOURCE_GUARDS_OK')
+          '@ | python -
+
+      - name: Stage and verify bundled Korean OCR engine
+        shell: pwsh
+        run: |
+          ./build_input/v1003_korean_prepare_tesseract.ps1
+          Push-Location portable/app_payload
+          $env:TESSERACT_CMD=(Resolve-Path 'tesseract/tesseract.exe').Path
+          @'
+          from pathlib import Path
+          import pytesseract
+          import korean_question_helper as k
+          cmd=k._find_tesseract_cmd()
+          assert cmd and Path(cmd).name.lower() == 'tesseract.exe', cmd
+          tessdata=k.configure_tesseract_runtime(cmd)
+          assert Path(tessdata, 'kor.traineddata').is_file()
+          assert Path(tessdata, 'eng.traineddata').is_file()
+          pytesseract.pytesseract.tesseract_cmd=cmd
+          langs=set(pytesseract.get_languages(config=''))
+          assert {'kor','eng'} <= langs, langs
+          print('V1004_PORTABLE_OCR_RUNTIME_OK', cmd, sorted(langs))
+          '@ | python -
+          Pop-Location
+
+      - name: Build Windows onefile client
+        shell: pwsh
+        run: ./build_input/v1003_korean_build.ps1
+
+      - name: Smoke Windows launcher
+        shell: pwsh
+        run: ./build_input/v1001_smoke.ps1 -Root portable
+
+      - name: Package V10.0.4 portable and launcher update
+        shell: pwsh
+        run: |
+          Remove-Item portable/app_payload/dist_nuitka -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem portable -Directory -Recurse -Filter '__pycache__' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          python build_input/v1004_package_korean.py
+
+      - name: Verify full portable package
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V10.0.4_KoreanHelper_PortableOCR_Windows.zip -DestinationPath verify_v1004 -Force
+          if (!(Test-Path verify_v1004/NghiaLauncher.exe)) { throw 'NghiaLauncher.exe missing' }
+          if (!(Test-Path verify_v1004/app_payload/NghiaClientApp.exe)) { throw 'NghiaClientApp.exe missing' }
+          if (!(Test-Path verify_v1004/app_payload/tesseract/tesseract.exe)) { throw 'tesseract.exe missing' }
+          if (!(Test-Path verify_v1004/app_payload/tesseract/tessdata/kor.traineddata)) { throw 'kor.traineddata missing' }
+          if (!(Test-Path verify_v1004/app_payload/tesseract/tessdata/eng.traineddata)) { throw 'eng.traineddata missing' }
+          $v=(Get-Content verify_v1004/version.json -Raw | ConvertFrom-Json).version
+          if ($v -ne '10.0.4') { throw "wrong packaged version $v" }
+          ./build_input/v1001_smoke.ps1 -Root verify_v1004
+          Write-Host 'V1004_FULL_PACKAGE_SMOKE_OK'
+
+      - name: Upload V10.0.4 Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V10.0.4-Korean-OCR-Fix-Windows
+          path: |
+            out/NghiaClient_V10.0.4_KoreanHelper_PortableOCR_Windows.zip
+            out/NghiaEdition_Update_v10.0.4.zip
+            out/korean_portable_preflight_v10.0.4.json
+            out/korean_portable_sha256_v10.0.4.txt
+          if-no-files-found: error
+          retention-days: 14
