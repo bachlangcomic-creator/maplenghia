@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/build-v9.9.8-pirate-points.yml'
       - 'build_input/apply_v998.py'
+      - 'build_input/apply_v998_windows.py'
       - 'build_input/v998_prepare.ps1'
       - 'build_input/v998_verify.py'
       - 'build_input/v998_build.ps1'
@@ -47,7 +48,7 @@ jobs:
 
       - name: Apply V9.9.8 source transform
         shell: pwsh
-        run: python build_input/apply_v998.py
+        run: python build_input/apply_v998_windows.py
 
       - name: Install dependencies
         shell: pwsh
