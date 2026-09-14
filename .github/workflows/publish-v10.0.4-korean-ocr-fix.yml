@@ -54,7 +54,7 @@ jobs:
             actual=$(sha256sum "publish/$name" | awk '{print $1}')
             test "$expected" = "$actual"
             echo "SHA256_OK $name $actual"
-          done < publish/korean_portable_sha256_v10.0.4.txt
+          done < <(sed 's/\r$//' publish/korean_portable_sha256_v10.0.4.txt)
 
       - name: Publish GitHub release v10.0.4
         shell: bash
@@ -89,7 +89,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          update_sha=$(grep 'NghiaEdition_Update_v10.0.4.zip$' publish/korean_portable_sha256_v10.0.4.txt | awk '{print $1}')
+          update_sha=$(sed 's/\r$//' publish/korean_portable_sha256_v10.0.4.txt | grep 'NghiaEdition_Update_v10.0.4.zip$' | awk '{print $1}')
           test ${#update_sha} -eq 64
           git fetch origin main
           git checkout main
