@@ -1,10 +1,10 @@
 {
   "version": "10.0.6",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.6/NghiaEdition_Update_v10.0.6.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.6/NghiaEdition_Update_v10.0.6.zip",
-  "sha256": "3447656af17f85f6b19e96b356f9194fa41e922623ae6a4ce8e267abd8f1820e",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.6-antijitter/NghiaEdition_Update_v10.0.6_AntiJitter_Hysteresis.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.6-antijitter/NghiaEdition_Update_v10.0.6_AntiJitter_Hysteresis.zip",
+  "sha256": "4a3b9ace757059e41a44552c5ef21b965cc8ffc64e55c80bb309e5b98fb0666b",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.6 STOP Non-Blocking. Fixes Nghia client STOP freezing behind the shared input lock while preserving the V10.0.3 Loot Parity Defense, Pirate route Loot, combat timing, maps and updater behavior."
+  "notes": "V10.0.6 Anti-Jitter / Hysteresis stable. Adds optional Anti-Jitter/Hysteresis with true OFF bypass to original V10.0.6 behavior, while preserving STOP Non-Blocking, Loot Parity Defense, Pirate route Loot, combat timing, maps and updater behavior."
 }
