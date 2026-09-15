@@ -1,10 +1,10 @@
 {
-  "version": "10.0.3",
+  "version": "10.0.6",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.3/NghiaEdition_Update_v10.0.3.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.3/NghiaEdition_Update_v10.0.3.zip",
-  "sha256": "9167b43a15127bd351dc94bbe300ef31e18dd5d5b2152f8de4897435b021acb3",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.6/NghiaEdition_Update_v10.0.6.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.6/NghiaEdition_Update_v10.0.6.zip",
+  "sha256": "3447656af17f85f6b19e96b356f9194fa41e922623ae6a4ce8e267abd8f1820e",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.3 Loot Parity Defense. Adds a defense-in-depth invariant so exact Spotify parity refuses generic Loot for SIMPLE/Bunny-style routes even if an auxiliary caller reaches the core directly. Pirate route-owned Loot, TP/Skill timing, Adaptive Y, MiuMiu, Strategy V10 and maps behavior remain unchanged from V10.0.2."
+  "notes": "V10.0.6 STOP Non-Blocking. Fixes Nghia client STOP freezing behind the shared input lock while preserving the V10.0.3 Loot Parity Defense, Pirate route Loot, combat timing, maps and updater behavior."
 }
