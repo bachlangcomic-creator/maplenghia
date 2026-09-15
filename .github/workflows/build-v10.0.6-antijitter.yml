@@ -60,8 +60,41 @@ jobs:
           '@ | python -
           git apply --check --directory=portable build_input/v1006_antijitter_core.runtime.patch
           git apply --directory=portable build_input/v1006_antijitter_core.runtime.patch
-          git apply --check --directory=portable build_input/v1006_antijitter_ui.patch
-          git apply --directory=portable build_input/v1006_antijitter_ui.patch
+          @'
+          from pathlib import Path
+          import hashlib
+          p = Path("portable/app_payload/nghia_spotify_nologin.py")
+          data = p.read_bytes()
+          before = hashlib.sha256(data).hexdigest()
+          expected_before = "401fe85e44aef50ef77cd7fb7895b52b6ba8ff8c3e9f38e2c4ffb2ab8211e032"
+          if before != expected_before:
+              raise SystemExit(f"unexpected UI base hash {before}")
+          needle = b"            self.map_quick_buttons[name] = btn\n\n        ctk.CTkButton(\n"
+          insert = (
+              b"            self.map_quick_buttons[name] = btn\n\n"
+              b"        ctk.CTkCheckBox(\n"
+              b"            box,\n"
+              + '            text="Anti-Jitter / Hysteresis • OFF = V10.0.6 gốc",\n'.encode("utf-8")
+              + b"            variable=self.anti_jitter_enabled,\n"
+              + b"            command=self._on_anti_jitter_toggle,\n"
+              + b'            text_color=c["text"],\n'
+              + b'            fg_color=c["cyan"],\n'
+              + b'            hover_color=c["cyan_hover"],\n'
+              + b'            border_color=c["line_bright"],\n'
+              + b'            font=self._font(10, "bold"),\n'
+              + b'        ).pack(anchor="w", padx=12, pady=(0, 9))\n\n'
+              + b"        ctk.CTkButton(\n"
+          )
+          if data.count(needle) != 1:
+              raise SystemExit(f"UI insertion anchor count={data.count(needle)}")
+          data = data.replace(needle, insert, 1)
+          after = hashlib.sha256(data).hexdigest()
+          expected_after = "f36bf4e270b4a8a4cd04e50f8b766f107d1ea7d6a39fe08e38d48a8fa0767b1c"
+          if after != expected_after:
+              raise SystemExit(f"unexpected UI final hash {after}")
+          p.write_bytes(data)
+          print("V1006_ANTIJITTER_UI_PATCH_OK")
+          '@ | python -
           python build_input/v1006_antijitter_verify.py portable/app_payload
 
       - name: Install test and Nuitka dependencies
