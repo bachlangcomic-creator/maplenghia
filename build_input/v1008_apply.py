@@ -74,7 +74,8 @@ if OLD_VERSION in text:
     raise SystemExit(f"failed to replace all {OLD_VERSION} UI version strings")
 ui_path.write_text(text, encoding="utf-8")
 
-helper_src = (Path(__file__).resolve().with_name("nghia_adaptive_y_ui.py")).read_bytes()
+helper_path = Path(__file__).resolve().with_name("nghia_adaptive_y_ui.py")
+helper_src = helper_path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
 if hashlib.sha256(helper_src).hexdigest() != HELPER_SHA256:
     raise SystemExit("bundled Adaptive Y helper source hash mismatch")
 (APP / "nghia_adaptive_y_ui.py").write_bytes(helper_src)
