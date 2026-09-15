@@ -1,0 +1,161 @@
+name: Build and Publish Nghia V10.0.6 Anti-Jitter
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-v10.0.6-antijitter.yml'
+      - 'build_input/v1006_antijitter_*'
+      - 'build_input/v1006_antijitter_tests/**'
+      - 'build_input/RELEASE_NOTES_v10.0.6_antijitter.md'
+
+permissions:
+  contents: write
+
+jobs:
+  build-publish-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V10.0.6 STOP base from published portable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base | Out-Null
+          gh release download v10.0.6 --repo $env:GITHUB_REPOSITORY `
+            -p NghiaClient_V10.0.6_StopNonBlocking_Windows_Candidate.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.6 base portable download failed' }
+          $zip='base/NghiaClient_V10.0.6_StopNonBlocking_Windows_Candidate.zip'
+          $got=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected='1ca421d734d12e1ff2bbbe3bd6d42f9bc67e2e35d5d438451e4ffb70cc99bfbb'
+          if ($got -ne $expected) { throw "V10.0.6 base hash mismatch $got" }
+          Expand-Archive $zip -DestinationPath portable -Force
+          python build_input/v1006_verify.py
+          python -m pytest -q build_input/test_v1006_stop_nonblocking.py
+
+      - name: Apply Anti-Jitter core and visible UI patches
+        shell: pwsh
+        run: |
+          git config core.autocrlf false
+          git config core.eol lf
+          git config core.safecrlf false
+          @'
+          from pathlib import Path
+          import base64, zlib
+          dst = Path("build_input/v1006_antijitter_core.runtime.patch")
+          encoded = "".join(
+              Path(f"build_input/v1006_antijitter_core.part{i}.b85").read_text(encoding="ascii").strip()
+              for i in range(1, 5)
+          )
+          packed = base64.b85decode(encoded)
+          dst.write_bytes(zlib.decompress(packed))
+          '@ | python -
+          git apply --check --directory=portable build_input/v1006_antijitter_core.runtime.patch
+          git apply --directory=portable build_input/v1006_antijitter_core.runtime.patch
+          git apply --check --directory=portable build_input/v1006_antijitter_ui.patch
+          git apply --directory=portable build_input/v1006_antijitter_ui.patch
+          python build_input/v1006_antijitter_verify.py portable/app_payload
+
+      - name: Install test and Nuitka dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: Compile and run 17 Anti-Jitter regression tests
+        shell: pwsh
+        run: |
+          python -m compileall -q portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          New-Item -ItemType Directory -Force candidate | Out-Null
+          Copy-Item portable/app_payload candidate/app_payload -Recurse -Force
+          New-Item -ItemType Directory -Force candidate/portable | Out-Null
+          Copy-Item portable/app_payload candidate/portable/app_payload -Recurse -Force
+          Copy-Item build_input/v1006_antijitter_tests candidate/tests -Recurse -Force
+          python -m pytest -q candidate/tests --junitxml=v1006-antijitter-junit.xml
+          if ($LASTEXITCODE -ne 0) { throw 'Anti-Jitter regression tests failed' }
+          @'
+          import xml.etree.ElementTree as ET
+          root=ET.parse('v1006-antijitter-junit.xml').getroot()
+          suite=root if root.tag=='testsuite' else root.find('testsuite')
+          if suite is None:
+              raise SystemExit('unexpected JUnit root')
+          got=(int(suite.attrib.get('tests','0')), int(suite.attrib.get('failures','0')), int(suite.attrib.get('errors','0')))
+          if got != (17,0,0):
+              raise SystemExit(f'unexpected Anti-Jitter test result {got}')
+          print('V1006_ANTIJITTER_17_TESTS_OK')
+          '@ | python -
+          python build_input/v1006_antijitter_verify.py portable/app_payload
+
+      - name: Build fresh Windows executable with Nuitka
+        shell: pwsh
+        run: ./build_input/v1001_build.ps1
+
+      - name: Verify rebuilt PE and source after Nuitka
+        shell: pwsh
+        run: |
+          $exe='portable/app_payload/NghiaClientApp.exe'
+          if (!(Test-Path $exe)) { throw 'NghiaClientApp.exe missing after build' }
+          $bytes=[IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'rebuilt app is not PE/MZ' }
+          python build_input/v1006_antijitter_verify.py portable/app_payload
+
+      - name: Smoke rebuilt Windows launcher
+        shell: pwsh
+        run: ./build_input/v1001_smoke.ps1 -Root portable
+
+      - name: Package Anti-Jitter Windows candidate
+        shell: pwsh
+        run: python build_input/v1006_antijitter_package.py
+
+      - name: Smoke packaged Windows candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V10.0.6_AntiJitter_Hysteresis_Windows_Candidate.zip -DestinationPath verify -Force
+          ./build_input/v1001_smoke.ps1 -Root verify
+          python build_input/v1006_antijitter_verify.py verify/app_payload
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report_antijitter.json')
+          r=json.loads(p.read_text(encoding='utf-8'))
+          r['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(r,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V10.0.6-AntiJitter-Hysteresis-Windows
+          path: |
+            out/NghiaClient_V10.0.6_AntiJitter_Hysteresis_Windows_Candidate.zip
+            out/NghiaEdition_Update_v10.0.6_AntiJitter_Hysteresis.zip
+            out/preflight_report_antijitter.json
+            out/preflight_hashes_antijitter.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish Anti-Jitter candidate release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v10.0.6-antijitter
+          name: Nghia Client v10.0.6 - Anti-Jitter / Hysteresis Candidate
+          body_path: build_input/RELEASE_NOTES_v10.0.6_antijitter.md
+          draft: false
+          prerelease: false
+          make_latest: false
+          overwrite_files: true
+          files: |
+            out/NghiaClient_V10.0.6_AntiJitter_Hysteresis_Windows_Candidate.zip
+            out/NghiaEdition_Update_v10.0.6_AntiJitter_Hysteresis.zip
+            out/preflight_report_antijitter.json
+            out/preflight_hashes_antijitter.txt
