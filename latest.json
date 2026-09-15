@@ -1,10 +1,10 @@
 {
-  "version": "10.0.7",
+  "version": "10.0.8",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.7/NghiaEdition_Update_v10.0.7.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.7/NghiaEdition_Update_v10.0.7.zip",
-  "sha256": "a9b43029b0df632983904be38f17eba270011c103652c3d433f8535186f13985",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.8/NghiaEdition_Update_v10.0.8.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.8/NghiaEdition_Update_v10.0.8.zip",
+  "sha256": "52b003c4bd2835af41432e663da723c4d7b58b905c612e3878d383d149309b74",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.7 Anti-Jitter / Hysteresis stable. Same validated farm/runtime behavior as the V10.0.6 Anti-Jitter candidate, promoted to a new semantic version so existing V10.0.6 clients receive the update."
+  "notes": "V10.0.8 adds a visible map-aware Adaptive Y ON/OFF control for C2/B3. C2 and B3 keep their existing Adaptive Y engines; other maps disable the control. Anti-Jitter, STOP Non-Blocking, Loot Parity Defense, combat timing and maps are preserved."
 }
