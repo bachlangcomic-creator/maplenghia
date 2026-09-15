@@ -1,0 +1,21 @@
+--- a/app_payload/nghia_spotify_nologin.py
++++ b/app_payload/nghia_spotify_nologin.py
+@@ -388,6 +388,18 @@
+             btn.grid(row=idx // 2, column=idx % 2, sticky="ew", padx=3, pady=3)
+             self.map_quick_buttons[name] = btn
+ 
++        ctk.CTkCheckBox(
++            box,
++            text="Anti-Jitter / Hysteresis • OFF = V10.0.6 gốc",
++            variable=self.anti_jitter_enabled,
++            command=self._on_anti_jitter_toggle,
++            text_color=c["text"],
++            fg_color=c["cyan"],
++            hover_color=c["cyan_hover"],
++            border_color=c["line_bright"],
++            font=self._font(10, "bold"),
++        ).pack(anchor="w", padx=12, pady=(0, 9))
++
+         ctk.CTkButton(
+             box,
+             text="LẤY TỌA ĐỘ / THÊM MAP",
