@@ -32,7 +32,7 @@ assert sha(p)=='8f85f95917e898007a83ebb13337cae702c6b1ec401f7af571fb46dd8604d01e
 p=APP/'spotify_watchdog.py'
 assert sha(p)=='b78803f61f17598103e3090387fcb675bf2d1f45a8a9af4157fe7ceb1045c870'
 rr(p,b'    def stop(self):\r\n',b'    def get_next_sell_delay',dec('eNp1T0EOwjAMu0/aH3JshVTBgQvSvsAXqmrLRtBIoU15PyotbEwipzhObAcAYMARAj4SRrFR/F1FnEd9ahuolbGZkDE4Ic+w6+CwYd+HJqIo3TaFy7L/5X4M9ULKJaAboCtbBS0sjZ8Fx0NtDUXrZnqi0qspUAT2UhHxZPoUArLYMlHrRIuxuXpiJXRDn6Tbm6Pe5P7mO3vG/OoLpNVddA=='))
-assert sha(p)=='4feaa4debf6e99f960e0058b3e43111b557317b2fa347ec4531752079e75c79'
+assert sha(p)=='4feaa4debf6e99f960e0058b3e43111b557317b2fa347ecf4531752079e75c79'
 
 p=APP/'nghia_spotify_nologin.py'
 assert sha(p)=='61131ccedd816af3c375f583b4e806b620abcaf7c9a866e158e5c059e7ab03bd'
