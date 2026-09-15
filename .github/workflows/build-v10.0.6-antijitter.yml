@@ -40,7 +40,6 @@ jobs:
           if ($got -ne $expected) { throw "V10.0.6 base hash mismatch $got" }
           Expand-Archive $zip -DestinationPath portable -Force
           python build_input/v1006_verify.py
-          python -m pytest -q build_input/test_v1006_stop_nonblocking.py
 
       - name: Apply Anti-Jitter core and visible UI patches
         shell: pwsh
@@ -76,6 +75,8 @@ jobs:
         run: |
           python -m compileall -q portable/app_payload
           if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+          python -m pytest -q build_input/test_v1006_stop_nonblocking.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.6 STOP regression failed' }
           New-Item -ItemType Directory -Force candidate | Out-Null
           Copy-Item portable/app_payload candidate/app_payload -Recurse -Force
           New-Item -ItemType Directory -Force candidate/portable | Out-Null
