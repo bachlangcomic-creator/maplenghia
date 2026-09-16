@@ -213,13 +213,14 @@ class SafeEntryReturnTests(unittest.TestCase):
         engine, host = _strategy(safe_entry=(20, 20))
         self.assertTrue(engine.request_post_sell_return_to_farm())
         cfg = {"jump_key": "C", "left_key": "LEFT", "right_key": "RIGHT"}
-        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (12, 10), 20.0))
+        # SAFE is one minimap floor above the farm lane (farm Y=20 here).
+        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (12, 0), 20.0))
         self.assertEqual(host.moves[-1], "RIGHT")
         self.assertEqual(host.behavior_engine.core.down_jump_calls, 0)
-        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 10), 20.1))
+        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 0), 20.1))
         self.assertEqual(host.behavior_engine.core.down_jump_calls, 1)
         self.assertTrue(engine.return_to_farm_pending)
-        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 15), 20.3))
+        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 5), 20.3))
         self.assertFalse(engine._post_sell_return_to_farm_step(cfg, (20, 20), 20.7))
         self.assertFalse(engine.return_to_farm_pending)
 
@@ -228,12 +229,12 @@ class SafeEntryReturnTests(unittest.TestCase):
         self.assertTrue(engine.request_post_sell_return_to_farm())
         cfg = {"jump_key": "C", "left_key": "LEFT", "right_key": "RIGHT"}
         host.spotify_sell_inflight = True
-        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 10), 30.0))
+        self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 0), 30.0))
         self.assertEqual(host.behavior_engine.core.down_jump_calls, 0)
         host.spotify_sell_inflight = False
         host.sell_lock.acquire()
         try:
-            self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 10), 30.1))
+            self.assertTrue(engine._post_sell_return_to_farm_step(cfg, (20, 0), 30.1))
             self.assertEqual(host.behavior_engine.core.down_jump_calls, 0)
         finally:
             host.sell_lock.release()
@@ -246,7 +247,7 @@ class SafeEntryReturnTests(unittest.TestCase):
             "spotify_attack_key": "X", "tele_enabled": False, "auto_loot": False,
             "pause_on_focus_loss": False,
         }
-        self.assertTrue(engine.tick(cfg, (12, 10), 40.0))
+        self.assertTrue(engine.tick(cfg, (12, 0), 40.0))
         self.assertEqual(host.behavior_engine.core.combat_calls, 0)
         self.assertTrue(engine.return_to_farm_pending)
 
