@@ -1,0 +1,30 @@
+name: Inspect V10.0.17 exact base
+
+on:
+  push:
+    branches: [v10.0.17-safe-entry-return]
+    paths:
+      - '.github/workflows/inspect-v10.0.17-base.yml'
+      - 'build_input/inspect_v1017_base.py'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download exact V10.0.15 stable base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p base portable
+          gh release download v10.0.15 --repo "$GITHUB_REPOSITORY" -p NghiaClient_V10.0.15_HumanRestMs_Windows.zip -D base
+          echo '5befa56f54c75b20aeaa8d9c9f1cf588bbad883e47b72f09cd02eaf88ebdcea8  base/NghiaClient_V10.0.15_HumanRestMs_Windows.zip' | sha256sum -c -
+          unzip -q base/NghiaClient_V10.0.15_HumanRestMs_Windows.zip -d portable
+      - name: Print exact V10.0.15 source anchors
+        run: python build_input/inspect_v1017_base.py portable/app_payload
