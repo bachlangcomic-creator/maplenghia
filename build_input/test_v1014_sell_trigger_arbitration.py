@@ -33,6 +33,11 @@ def _make_stage_harness():
     host._c2_trace_emit = lambda *args, **kwargs: None
     host._log = lambda *args, **kwargs: None
     host.run_sell_thread = lambda cfg: None
+    # V10.0.16 adds optional SAFE ENTRY helpers to the same sell-stage method.
+    # These no-op stubs keep this historical V10.0.14 arbitration harness focused
+    # on its original trigger semantics when map_profile has no SAFE_ENTRY fields.
+    host._spotify_reset_custom_safe_entry_state = lambda: None
+    host._spotify_custom_safe_entry_step = lambda cfg, map_pos, now: "READY"
 
     class Core:
         def _spotify_reset_safe_place_state(self):
