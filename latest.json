@@ -1,10 +1,10 @@
 {
-  "version": "10.0.12",
+  "version": "10.0.13",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.12/NghiaEdition_Update_v10.0.12.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.12/NghiaEdition_Update_v10.0.12.zip",
-  "sha256": "45184cb5ddc49aec40ebe0fd7e433398ee55f390ca9006785aa6e179b8420853",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.13/NghiaEdition_Update_v10.0.13.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.13/NghiaEdition_Update_v10.0.13.zip",
+  "sha256": "98ceb3d0a916787c31f965f7916eb07766f09034facdcd50c983904b9e6d5fcd",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.12 fixes the watchdog annotated-preview crash where SpotifyDetectionResult objects could be cached and later unpacked as drawable (score, x, y, w, h) boxes. V10.0.11 Custom Map, MiuMiu, Adaptive Y, Anti-Jitter, STOP and core behavior are preserved."
+  "notes": "V10.0.13 connects Custom Map STRATEGY_V10 to the existing SELL_SAFE/MiuMiu flow. When Auto Sell and the sell timer are enabled, timer due now preempts farm, moves to the Custom Map SAFE_PLACE, runs the existing MiuMiu seller, blocks Strategy inputs while selling, then resumes farm. V10.0.12 fixes are preserved."
 }
