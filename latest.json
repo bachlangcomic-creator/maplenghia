@@ -1,10 +1,10 @@
 {
-  "version": "10.0.16",
+  "version": "10.0.14",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.16/NghiaEdition_Update_v10.0.16.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.16/NghiaEdition_Update_v10.0.16.zip",
-  "sha256": "aa0f53f458883c33fbc247862e69110a94c93cba342683d28bab831db91743e0",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
+  "sha256": "c0bbe13d590b555f1b8cb9a76b5604addc56b1d4b9378c0b30734751eac67058",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.16 adds Custom Map SAFE ENTRY and FARM RETURN on top of V10.0.15. SAFE ENTRY routes to the climb point, performs UP + Jump, then verifies SAFE before MiuMiu. FARM RETURN routes back to the drop point and performs DOWN + Jump before farming resumes. The feature is isolated to V10 Custom Map profiles; bundled/original map profiles and protected Spotify core files remain unchanged."
+  "notes": "V10.0.14 fixes MiuMiu sell-trigger arbitration. With the sell timer enabled, only the timer event may start SELL_SAFE; full-bag detections and legacy sell_only_when_full state can no longer steal movement/skill input before the timer is due. Toggling Auto Sell also clears stale sell triggers and restarts the timer schedule. V10.0.13 Custom Map Sell-Safe is preserved."
 }
