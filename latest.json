@@ -1,10 +1,10 @@
 {
-  "version": "10.0.13",
+  "version": "10.0.14",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.13/NghiaEdition_Update_v10.0.13.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.13/NghiaEdition_Update_v10.0.13.zip",
-  "sha256": "98ceb3d0a916787c31f965f7916eb07766f09034facdcd50c983904b9e6d5fcd",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
+  "sha256": "3b5c479cfa04aad1d29873fcad8c607cd243a13a0953ba3fff9e5cb12b28178c",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.13 connects Custom Map STRATEGY_V10 to the existing SELL_SAFE/MiuMiu flow. When Auto Sell and the sell timer are enabled, timer due now preempts farm, moves to the Custom Map SAFE_PLACE, runs the existing MiuMiu seller, blocks Strategy inputs while selling, then resumes farm. V10.0.12 fixes are preserved."
+  "notes": "V10.0.14 fixes MiuMiu sell-trigger arbitration. With the sell timer enabled, only the timer event may start SELL_SAFE; full-bag detections and legacy sell_only_when_full state can no longer steal movement/skill input before the timer is due. Toggling Auto Sell also clears stale sell triggers and restarts the timer schedule. V10.0.13 Custom Map Sell-Safe is preserved."
 }
