@@ -28,7 +28,7 @@ BASE = {
 
 FINAL = {
     "nghia_spotify_nologin.py": "6a06448e65ae79b0cfdb7af61ff3322f248bb2b6675a21fde8f11e6ba21b228d",
-    "nghia_strategy_v10.py": "7d8c9f467a86b140cf528cffdd63091be0173be8433bf805e7d970857215d92b",
+    "nghia_strategy_v10.py": "e1e256a4abef2d412aa56e481c753fc4debc6485ffed3e7d410a0d707032e1b2",
 }
 
 
@@ -48,17 +48,8 @@ for rel, expected in BASE.items():
 strategy_path = APP / "nghia_strategy_v10.py"
 s = normalized(strategy_path)
 
-import_anchor = "from typing import Any, Mapping, Optional, Tuple\n"
-if s.count(import_anchor) != 1:
-    raise SystemExit("V10.0.13 strategy import anchor mismatch")
-s = s.replace(
-    import_anchor,
-    import_anchor + "\nfrom spotify_main_farm_orchestrator import STOP_TICK\n",
-    1,
-)
-
 helper_anchor = '''    def tick(self, cfg: Mapping[str, Any], map_pos, now: float) -> bool:\n'''
-helper = '''    def _sell_safe_step(self, cfg: Mapping[str, Any], map_pos, now: float) -> bool:\n        sell_lock = getattr(self.host, "sell_lock", None)\n        lock_held = bool(sell_lock is not None and callable(getattr(sell_lock, "locked", None)) and sell_lock.locked())\n        if bool(getattr(self.host, "spotify_sell_inflight", False)) or lock_held:\n            self.release_inputs()\n            return True\n        stage = getattr(self.host, "_spotify_mainfarm_sell_safe_stage", None)\n        if not callable(stage):\n            return False\n        return stage(cfg, map_pos, now, owner="V10_STRATEGY") == STOP_TICK\n\n'''
+helper = '''    def _sell_safe_step(self, cfg: Mapping[str, Any], map_pos, now: float) -> bool:\n        sell_lock = getattr(self.host, "sell_lock", None)\n        lock_held = bool(sell_lock is not None and callable(getattr(sell_lock, "locked", None)) and sell_lock.locked())\n        if bool(getattr(self.host, "spotify_sell_inflight", False)) or lock_held:\n            self.release_inputs()\n            return True\n        stage = getattr(self.host, "_spotify_mainfarm_sell_safe_stage", None)\n        if not callable(stage):\n            return False\n        return stage(cfg, map_pos, now, owner="V10_STRATEGY") == "STOP_TICK"\n\n'''
 if s.count(helper_anchor) != 1:
     raise SystemExit("V10.0.13 tick helper anchor mismatch")
 s = s.replace(helper_anchor, helper + helper_anchor, 1)
