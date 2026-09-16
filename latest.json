@@ -3,7 +3,7 @@
   "channel": "stable",
   "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.11/NghiaEdition_Update_v10.0.11.zip",
   "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.11/NghiaEdition_Update_v10.0.11.zip",
-  "sha256": "dcfdfea7c05a14985d520858169a259d3e186fe340e922dff499397e72a42f03",
+  "sha256": "5001eb04c69fdd339ad4a0dc08e54202ddbca8c0dcf31d9d9ffdfd19b61bb421",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
   "notes": "V10.0.11 keeps all V10.0.10 Custom Map parity features and makes bottom-loot coordinates optional for V10 Custom Maps when Loot is SIMPLE or NONE. PIRATE_BOTTOM_CUSTOM still requires all four bottom-loot coordinates."
