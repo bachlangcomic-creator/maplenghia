@@ -1,0 +1,101 @@
+name: Validate V10.0.12 Watchdog Preview Type Fix
+
+on:
+  push:
+    branches: [v10.0.12-watchdog-preview-type-fix]
+    paths:
+      - '.github/workflows/validate-v10.0.12-watchdog-preview-type-fix.yml'
+      - 'build_input/v1012_*'
+      - 'build_input/test_v1012_detection_cache_typing.py'
+      - 'build_input/RELEASE_NOTES_v10.0.12.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-regression:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V10.0.11 stable base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base | Out-Null
+          gh release download v10.0.11 --repo $env:GITHUB_REPOSITORY `
+            -p NghiaClient_V10.0.11_SimpleLootOptional_Windows.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.11 base download failed' }
+          $zip='base/NghiaClient_V10.0.11_SimpleLootOptional_Windows.zip'
+          $got=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected='bae562afa30d5c720f85e016fc83464a238d3a9252edc72aac791f716be4fd86'
+          if ($got -ne $expected) { throw "V10.0.11 base hash mismatch $got" }
+          Expand-Archive $zip -DestinationPath portable -Force
+
+      - name: Apply guarded V10.0.12 patch
+        shell: pwsh
+        run: |
+          python build_input/v1012_apply.py portable
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.12 patch failed' }
+          python build_input/v1012_verify.py portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.12 verify failed' }
+
+      - name: Install regression dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest
+
+      - name: Compile and run complete source regressions
+        shell: pwsh
+        env:
+          NGHIA_APP_DIR: portable/app_payload
+        run: |
+          python -m compileall -q portable/app_payload build_input/v1012_apply.py build_input/v1012_verify.py build_input/v1012_release.py build_input/v1012_package.py build_input/test_v1012_detection_cache_typing.py
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+
+          python -m pytest -q build_input/test_v1012_detection_cache_typing.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.12 feature tests failed' }
+
+          python -m pytest -q build_input/test_v1011_simple_loot_optional.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.11 regression failed' }
+
+          python -m pytest -q build_input/test_v1010_custom_map_parity.py build_input/test_v1010_interactions.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.10 regression failed' }
+
+          python -m pytest -q build_input/test_v1009_features.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.9 regression failed' }
+
+          python -m pytest -q build_input/test_v1008_adaptive_y_map_toggle.py -k "not version_metadata_present"
+          if ($LASTEXITCODE -ne 0) { throw 'Adaptive Y regression failed' }
+
+          python -m pytest -q build_input/test_v1006_stop_nonblocking.py
+          if ($LASTEXITCODE -ne 0) { throw 'STOP Non-Blocking regression failed' }
+
+          New-Item -ItemType Directory -Force candidate | Out-Null
+          Copy-Item portable/app_payload candidate/app_payload -Recurse -Force
+          New-Item -ItemType Directory -Force candidate/portable | Out-Null
+          Copy-Item portable/app_payload candidate/portable/app_payload -Recurse -Force
+          Copy-Item build_input/v1006_antijitter_tests candidate/tests -Recurse -Force
+          python -m pytest -q candidate/tests --junitxml=v1012-antijitter-junit.xml
+          if ($LASTEXITCODE -ne 0) { throw 'Anti-Jitter regressions failed' }
+          @'
+          import xml.etree.ElementTree as ET
+          root=ET.parse('v1012-antijitter-junit.xml').getroot()
+          suite=root if root.tag=='testsuite' else root.find('testsuite')
+          if suite is None:
+              raise SystemExit('unexpected JUnit root')
+          got=(int(suite.attrib.get('tests','0')), int(suite.attrib.get('failures','0')), int(suite.attrib.get('errors','0')))
+          if got != (17,0,0):
+              raise SystemExit(f'unexpected Anti-Jitter result {got}')
+          print('V1012_ANTIJITTER_17_TESTS_OK')
+          '@ | python -
+
+          python build_input/v1012_verify.py portable/app_payload
