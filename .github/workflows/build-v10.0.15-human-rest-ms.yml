@@ -1,0 +1,244 @@
+name: Build and Publish Nghia V10.0.15 Human Rest ms
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-v10.0.15-human-rest-ms.yml'
+      - 'build_input/v1015_*'
+      - 'build_input/test_v1015_human_rest_ms.py'
+      - 'build_input/RELEASE_NOTES_v10.0.15.md'
+
+permissions:
+  contents: write
+
+jobs:
+  build-publish-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Prepare verified V10.0.14 stable base
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force base | Out-Null
+          gh release download v10.0.14 --repo $env:GITHUB_REPOSITORY `
+            -p NghiaClient_V10.0.14_SellTriggerArbitration_Windows.zip -D base
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.14 base download failed' }
+          $zip='base/NghiaClient_V10.0.14_SellTriggerArbitration_Windows.zip'
+          $got=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected='453f566e6b2d5538cd301e07fee93fa956d7908eb86fb800a4097cf3a379ba2f'
+          if ($got -ne $expected) { throw "V10.0.14 base hash mismatch $got" }
+          Expand-Archive $zip -DestinationPath portable -Force
+
+      - name: Apply guarded V10.0.15 patch
+        shell: pwsh
+        run: |
+          python build_input/v1015_apply.py portable
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.15 patch failed' }
+          python build_input/v1015_verify.py portable/app_payload
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.15 source verification failed' }
+
+      - name: Install test and Nuitka dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r portable/app_payload/requirements.txt pytest "nuitka>=2.7,<3" ordered-set zstandard
+
+      - name: Compile and run V10.0.15 regressions
+        shell: pwsh
+        env:
+          NGHIA_APP_DIR: portable/app_payload
+        run: |
+          python -m compileall -q portable/app_payload build_input/v1015_apply.py build_input/v1015_verify.py build_input/v1015_release.py build_input/v1015_package.py build_input/test_v1015_human_rest_ms.py
+          if ($LASTEXITCODE -ne 0) { throw 'compileall failed' }
+
+          python -m pytest -q build_input/test_v1015_human_rest_ms.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.15 feature tests failed' }
+
+          python -m pytest -q build_input/test_v1014_sell_trigger_arbitration.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.14 regression failed' }
+
+          python -m pytest -q build_input/test_v1013_custom_map_sell_safe.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.13 regression failed' }
+
+          python -m pytest -q build_input/test_v1012_detection_cache_typing.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.12 regression failed' }
+
+          python -m pytest -q build_input/test_v1011_simple_loot_optional.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.11 regression failed' }
+
+          python -m pytest -q build_input/test_v1010_custom_map_parity.py build_input/test_v1010_interactions.py -k "not human_behavior_rest_is_nonblocking_and_off_is_bypass"
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.10 regression failed' }
+
+          python -m pytest -q build_input/test_v1009_features.py
+          if ($LASTEXITCODE -ne 0) { throw 'V10.0.9 regression failed' }
+
+          python -m pytest -q build_input/test_v1008_adaptive_y_map_toggle.py -k "not version_metadata_present"
+          if ($LASTEXITCODE -ne 0) { throw 'Adaptive Y regression failed' }
+
+          python -m pytest -q build_input/test_v1006_stop_nonblocking.py
+          if ($LASTEXITCODE -ne 0) { throw 'STOP Non-Blocking regression failed' }
+
+          New-Item -ItemType Directory -Force candidate | Out-Null
+          Copy-Item portable/app_payload candidate/app_payload -Recurse -Force
+          New-Item -ItemType Directory -Force candidate/portable | Out-Null
+          Copy-Item portable/app_payload candidate/portable/app_payload -Recurse -Force
+          Copy-Item build_input/v1006_antijitter_tests candidate/tests -Recurse -Force
+          python -m pytest -q candidate/tests --junitxml=v1015-antijitter-junit.xml
+          if ($LASTEXITCODE -ne 0) { throw 'Anti-Jitter regressions failed' }
+          @'
+          import xml.etree.ElementTree as ET
+          root=ET.parse('v1015-antijitter-junit.xml').getroot()
+          suite=root if root.tag=='testsuite' else root.find('testsuite')
+          if suite is None:
+              raise SystemExit('unexpected JUnit root')
+          got=(int(suite.attrib.get('tests','0')), int(suite.attrib.get('failures','0')), int(suite.attrib.get('errors','0')))
+          if got != (17,0,0):
+              raise SystemExit(f'unexpected Anti-Jitter result {got}')
+          print('V1015_ANTIJITTER_17_TESTS_OK')
+          '@ | python -
+          python build_input/v1015_verify.py portable/app_payload
+
+      - name: Build fresh Windows executable with Nuitka
+        shell: pwsh
+        run: ./build_input/v1008_build.ps1
+
+      - name: Verify rebuilt PE and V10.0.15 source
+        shell: pwsh
+        run: |
+          $exe='portable/app_payload/NghiaClientApp.exe'
+          if (!(Test-Path $exe)) { throw 'NghiaClientApp.exe missing after build' }
+          $bytes=[IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'rebuilt app is not PE/MZ' }
+          python build_input/v1015_verify.py portable/app_payload
+
+      - name: Smoke rebuilt Windows launcher
+        shell: pwsh
+        run: ./build_input/v1001_smoke.ps1 -Root portable
+
+      - name: Package V10.0.15 stable
+        shell: pwsh
+        run: python build_input/v1015_package.py
+
+      - name: Verify V10.0.15 updater package contract
+        shell: pwsh
+        run: |
+          @'
+          from zipfile import ZipFile
+          import json
+          p='out/NghiaEdition_Update_v10.0.15.zip'
+          with ZipFile(p) as z:
+              names=set(z.namelist())
+              if 'release.json' not in names:
+                  raise SystemExit('release.json missing from updater')
+              r=json.loads(z.read('release.json').decode('utf-8'))
+              if r.get('version') != '10.0.15' or r.get('payload_dir') != 'app_payload':
+                  raise SystemExit(f'bad release metadata: {r}')
+              required=set(r.get('required_files') or [])
+              missing=[name for name in required if f'app_payload/{name}' not in names]
+              if missing:
+                  raise SystemExit(f'updater missing required payload: {missing}')
+          print('V1015_UPDATE_PACKAGE_CONTRACT_OK')
+          '@ | python -
+
+      - name: Smoke packaged V10.0.15 candidate
+        shell: pwsh
+        run: |
+          Expand-Archive out/NghiaClient_V10.0.15_HumanRestMs_Windows.zip -DestinationPath verify -Force
+          ./build_input/v1001_smoke.ps1 -Root verify
+          python build_input/v1015_verify.py verify/app_payload
+          @'
+          from pathlib import Path
+          import json
+          p=Path('out/preflight_report_v1015.json')
+          r=json.loads(p.read_text(encoding='utf-8'))
+          r['packaged_launcher_smoke']=True
+          p.write_text(json.dumps(r,indent=2)+'\n',encoding='utf-8')
+          '@ | python -
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nghia-V10.0.15-HumanRestMs-Windows
+          path: |
+            out/NghiaClient_V10.0.15_HumanRestMs_Windows.zip
+            out/NghiaEdition_Update_v10.0.15.zip
+            out/preflight_report_v1015.json
+            out/preflight_hashes_v1015.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish V10.0.15 stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v10.0.15
+          name: Nghia Client v10.0.15 - Human Rest 1000-1500ms
+          body_path: build_input/RELEASE_NOTES_v10.0.15.md
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            out/NghiaClient_V10.0.15_HumanRestMs_Windows.zip
+            out/NghiaEdition_Update_v10.0.15.zip
+            out/preflight_report_v1015.json
+            out/preflight_hashes_v1015.txt
+
+      - name: Verify published updater asset hash
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force published | Out-Null
+          gh release download v10.0.15 --repo $env:GITHUB_REPOSITORY `
+            -p NghiaEdition_Update_v10.0.15.zip -D published
+          if ($LASTEXITCODE -ne 0) { throw 'published updater download failed' }
+          $local=(Get-FileHash out/NghiaEdition_Update_v10.0.15.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          $remote=(Get-FileHash published/NghiaEdition_Update_v10.0.15.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($local -ne $remote) { throw "published updater hash mismatch local=$local remote=$remote" }
+          Write-Host "V1015_PUBLISHED_ASSET_HASH_OK $remote"
+
+      - name: Promote stable latest.json to V10.0.15
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          from pathlib import Path
+          import json, sys
+          sys.path.insert(0, 'build_input')
+          from v1015_release import stable_manifest
+          sha=Path('out/preflight_hashes_v1015.txt').read_text(encoding='utf-8').splitlines()[1].split()[0]
+          Path('out/latest_v1015.json').write_text(json.dumps(stable_manifest(sha), indent=2) + '\n', encoding='utf-8')
+          '@ | python -
+          $manifest = Get-Content out/latest_v1015.json -Raw
+          $content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($manifest))
+          $currentSha = gh api "repos/$env:GITHUB_REPOSITORY/contents/latest.json" --jq '.sha'
+          gh api --method PUT "repos/$env:GITHUB_REPOSITORY/contents/latest.json" `
+            --raw-field message='chore: promote v10.0.15 stable' `
+            --raw-field content="$content" `
+            --raw-field sha="$currentSha" `
+            --raw-field branch='main'
+          if ($LASTEXITCODE -ne 0) { throw 'latest.json promotion failed' }
+
+      - name: Verify stable latest.json
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $b64 = gh api "repos/$env:GITHUB_REPOSITORY/contents/latest.json" --jq '.content'
+          $text = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($b64 -replace '\s','')))
+          $obj = $text | ConvertFrom-Json
+          $expectedSha=(Get-FileHash out/NghiaEdition_Update_v10.0.15.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($obj.version -ne '10.0.15') { throw "latest.json version mismatch $($obj.version)" }
+          if ($obj.sha256 -ne $expectedSha) { throw "latest.json hash mismatch $($obj.sha256)" }
+          if ($obj.package_url -notlike '*releases/download/v10.0.15/NghiaEdition_Update_v10.0.15.zip') { throw "latest.json URL mismatch $($obj.package_url)" }
+          Write-Host 'V1015_LATEST_JSON_OK'
