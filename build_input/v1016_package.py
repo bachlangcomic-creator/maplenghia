@@ -37,7 +37,7 @@ if crash.exists():
         {
             "latest_version": VERSION,
             "local_version": VERSION,
-            "notes": "Nghia V10.0.16 Custom SAFE ENTRY",
+            "notes": "Nghia V10.0.16 Custom SAFE ENTRY + RETURN TO FARM",
             "state": "up_to_date",
         },
         indent=2,
@@ -81,11 +81,15 @@ psha = hashlib.sha256(portable.read_bytes()).hexdigest()
 usha = hashlib.sha256(updater.read_bytes()).hexdigest()
 report = {
     "version": VERSION,
-    "variant": "CustomSafeEntry",
+    "variant": "CustomSafeEntryReturnToFarm",
     "base_release": "v10.0.15",
     "safe_entry_optional": True,
     "safe_entry_up_jump": True,
     "direct_safe_fallback_when_missing": True,
+    "return_to_farm_after_sell": True,
+    "return_to_farm_reuses_safe_entry_x": True,
+    "return_to_farm_down_jump": True,
+    "return_to_farm_confirms_farm_y": True,
     "farm_return_included": False,
     "v1015_human_rest_preserved": True,
     "v1014_sell_trigger_arbitration_preserved": True,
@@ -96,7 +100,7 @@ report = {
     "maps_json_changed": False,
     "protected_core_changed": False,
     "updater_release_json_contract": True,
-    "feature_tests": 7,
+    "feature_tests": 12,
     "v1015_regressions": True,
     "v1014_regressions": True,
     "v1013_regressions": True,
@@ -120,4 +124,4 @@ report = {
 (out / "preflight_hashes_v1016.txt").write_text(
     f"{psha}  {portable.name}\n{usha}  {updater.name}\n", encoding="utf-8"
 )
-print("V1016_SAFE_ENTRY_PACKAGE_OK", psha, usha)
+print("V1016_SAFE_ENTRY_RETURN_PACKAGE_OK", psha, usha)
