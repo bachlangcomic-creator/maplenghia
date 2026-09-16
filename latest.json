@@ -1,10 +1,10 @@
 {
-  "version": "10.0.14",
+  "version": "10.0.15",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
-  "sha256": "3b5c479cfa04aad1d29873fcad8c607cd243a13a0953ba3fff9e5cb12b28178c",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.15/NghiaEdition_Update_v10.0.15.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.15/NghiaEdition_Update_v10.0.15.zip",
+  "sha256": "017af5dbdc40bf021d3d311bb1af9942d43856f7ad8cf958c41156bb988e3288",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.14 fixes MiuMiu sell-trigger arbitration. With the sell timer enabled, only the timer event may start SELL_SAFE; full-bag detections and legacy sell_only_when_full state can no longer steal movement/skill input before the timer is due. Toggling Auto Sell also clears stale sell triggers and restarts the timer schedule. V10.0.13 Custom Map Sell-Safe is preserved."
+  "notes": "V10.0.15 keeps SIMPLE Human Behavior at 2% rest, 6% jump, 92% continue, but shortens the rest window from 3-5 seconds to 1000-1500 ms. Jump remains 150-300 ms. V10.0.14 Sell Trigger Arbitration and V10.0.13 Custom Map Sell-Safe are preserved."
 }
