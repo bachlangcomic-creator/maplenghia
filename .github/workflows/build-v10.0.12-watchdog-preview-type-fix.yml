@@ -35,7 +35,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'V10.0.11 base download failed' }
           $zip='base/NghiaClient_V10.0.11_SimpleLootOptional_Windows.zip'
           $got=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected='bae562afa30d5c720f85e016fc83464a238d3a9252edc72aac791f716be4fd86'
+          $expected='1c9a81daaae3f457b6214a34322819deba7f1ded10d3fbc22f3fe3965706202b'
           if ($got -ne $expected) { throw "V10.0.11 base hash mismatch $got" }
           Expand-Archive $zip -DestinationPath portable -Force
 
