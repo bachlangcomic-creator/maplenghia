@@ -6,9 +6,9 @@ from pathlib import Path
 
 APP = Path(sys.argv[1] if len(sys.argv) > 1 else "portable/app_payload").resolve()
 
+# Mutable V10.0.16 controller/strategy files are verified structurally below.
+# Protected/original files keep exact byte guards.
 EXPECTED = {
-    "maple_nghia_pro.py": "9ef023d9aa00883ab6204155acdfe8eefea572de96e999f081cf715c421cf569",
-    "nghia_strategy_v10.py": "78398db62f43da7d607f7cdf3b11fd008ea801071f395dc90207aa869cf41870",
     "nghia_spotify_nologin.py": "8b064be4d4318176274350647926c3d592d023d99d707f81c43591d2e5a6ccbf",
     "maps.json": "52364dc3a284e051a04263b49e008caf699de9127cc62c8c59b7a8bb6533671d",
     "spotify_recovered_core.py": "7bd043a7615d97c533acc157c4a0112e5f3ffe32388c88e462c0fb36e6452048",
@@ -31,10 +31,12 @@ def sha(path: Path) -> str:
 for rel, expected in EXPECTED.items():
     got = sha(APP / rel)
     if got != expected:
-        raise SystemExit(f"V10.0.16 hash mismatch {rel}: {got} != {expected}")
+        raise SystemExit(f"V10.0.16 protected hash mismatch {rel}: {got} != {expected}")
 
-pro = (APP / "maple_nghia_pro.py").read_text(encoding="utf-8")
-strategy = (APP / "nghia_strategy_v10.py").read_text(encoding="utf-8")
+pro_path = APP / "maple_nghia_pro.py"
+strategy_path = APP / "nghia_strategy_v10.py"
+pro = pro_path.read_text(encoding="utf-8")
+strategy = strategy_path.read_text(encoding="utf-8")
 ui = (APP / "nghia_spotify_nologin.py").read_text(encoding="utf-8")
 
 required_pro = [
@@ -46,27 +48,39 @@ required_pro = [
     'entry_outcome = self._spotify_custom_safe_entry_step',
     'self.behavior_engine.core._spotify_jump_up(cfg)',
     'safe_entry=captured["SAFE_ENTRY"]',
+    'V10.0.16_RETURN_TO_FARM_AFTER_MIUMIU',
+    'request_post_sell_return_to_farm',
+    'về X SAFE ENTRY rồi ↓+Jump xuống tầng farm',
 ]
 for needle in required_pro:
     if needle not in pro:
-        raise SystemExit(f"V10.0.16 SAFE ENTRY marker missing in maple_nghia_pro.py: {needle}")
+        raise SystemExit(f"V10.0.16 controller marker missing: {needle}")
 
 required_strategy = [
     'safe_entry=None',
     '"SAFE_ENTRY_X"',
     '"SAFE_ENTRY_Y"',
+    'def request_post_sell_return_to_farm',
+    'def _post_sell_return_to_farm_step',
+    'return_to_farm_pending',
+    '_spotify_jump_down_reconstructed(cfg)',
+    'resolved.safe_entry[0]',
+    'FALL_RECOVERY_BAND',
 ]
 for needle in required_strategy:
     if needle not in strategy:
-        raise SystemExit(f"V10.0.16 SAFE ENTRY marker missing in nghia_strategy_v10.py: {needle}")
+        raise SystemExit(f"V10.0.16 strategy marker missing: {needle}")
 
-for forbidden in ("FARM_RETURN", "FARM RETURN", "request_post_sell_return", "_custom_farm_return_step"):
+# FARM RETURN is the separate wrong-floor feature and must remain deferred.
+for forbidden in ('"FARM_RETURN_X"', '"FARM_RETURN_Y"', '"FARM_RETURN":', '"FARM RETURN"', "_custom_farm_return_step"):
     if forbidden in pro or forbidden in strategy:
-        raise SystemExit(f"Farm Return must not ship in V10.0.16 SAFE ENTRY release: {forbidden}")
+        raise SystemExit(f"Separate FARM RETURN feature must not ship in V10.0.16: {forbidden}")
 
 if "10.0.16" not in ui:
     raise SystemExit("V10.0.16 UI version marker missing")
 if "10.0.15" in ui:
     raise SystemExit("stale V10.0.15 UI version marker remains")
 
-print("V1016_SAFE_ENTRY_VERIFY_OK")
+print("V1016_SAFE_ENTRY_RETURN_VERIFY_OK")
+print("V1016_MUTABLE_SHA maple_nghia_pro.py", sha(pro_path))
+print("V1016_MUTABLE_SHA nghia_strategy_v10.py", sha(strategy_path))
