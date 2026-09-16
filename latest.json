@@ -1,10 +1,10 @@
 {
-  "version": "10.0.11",
+  "version": "10.0.12",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.11/NghiaEdition_Update_v10.0.11.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.11/NghiaEdition_Update_v10.0.11.zip",
-  "sha256": "5001eb04c69fdd339ad4a0dc08e54202ddbca8c0dcf31d9d9ffdfd19b61bb421",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.12/NghiaEdition_Update_v10.0.12.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.12/NghiaEdition_Update_v10.0.12.zip",
+  "sha256": "45184cb5ddc49aec40ebe0fd7e433398ee55f390ca9006785aa6e179b8420853",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.11 keeps all V10.0.10 Custom Map parity features and makes bottom-loot coordinates optional for V10 Custom Maps when Loot is SIMPLE or NONE. PIRATE_BOTTOM_CUSTOM still requires all four bottom-loot coordinates."
+  "notes": "V10.0.12 fixes the watchdog annotated-preview crash where SpotifyDetectionResult objects could be cached and later unpacked as drawable (score, x, y, w, h) boxes. V10.0.11 Custom Map, MiuMiu, Adaptive Y, Anti-Jitter, STOP and core behavior are preserved."
 }
