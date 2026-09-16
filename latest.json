@@ -1,10 +1,10 @@
 {
-  "version": "10.0.14",
+  "version": "10.0.17",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.14/NghiaEdition_Update_v10.0.14.zip",
-  "sha256": "c0bbe13d590b555f1b8cb9a76b5604addc56b1d4b9378c0b30734751eac67058",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.17/NghiaEdition_Update_v10.0.17.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.17/NghiaEdition_Update_v10.0.17.zip",
+  "sha256": "91ec495c10bab3e187d934b2a4b1eb60a8712669db16da8cf8334957e8ed7399",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.14 fixes MiuMiu sell-trigger arbitration. With the sell timer enabled, only the timer event may start SELL_SAFE; full-bag detections and legacy sell_only_when_full state can no longer steal movement/skill input before the timer is due. Toggling Auto Sell also clears stale sell triggers and restarts the timer schedule. V10.0.13 Custom Map Sell-Safe is preserved."
+  "notes": "V10.0.17 is rebuilt from the verified V10.0.15 stable base. V10 Custom Map adds optional SAFE ENTRY for MiuMiu selling: move to SAFE ENTRY, UP+Jump, then verify SAFE before selling. After a successful MiuMiu sale, RETURN TO FARM aligns to SAFE_ENTRY_X on the upper SAFE floor, uses DOWN+Jump, confirms farm-lane Y, then resumes normal farming. The separate wrong-floor FARM RETURN feature is not included. Built-in maps and maps.json remain unchanged."
 }
