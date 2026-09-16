@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/validate-v10.0.17-red.yml'
       - 'build_input/test_v1017_safe_entry_return.py'
+      - 'build_input/inspect_v1017_base.py'
 
 permissions:
   contents: read
@@ -33,6 +34,9 @@ jobs:
           $expected='5befa56f54c75b20aeaa8d9c9f1cf588bbad883e47b72f09cd02eaf88ebdcea8'
           if ($got -ne $expected) { throw "V10.0.15 base hash mismatch $got" }
           Expand-Archive $zip -DestinationPath portable -Force
+      - name: Inspect exact V10.0.15 source anchors
+        shell: pwsh
+        run: python build_input/inspect_v1017_base.py portable/app_payload
       - name: Install test dependencies
         shell: pwsh
         run: |
