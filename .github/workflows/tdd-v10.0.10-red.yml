@@ -28,7 +28,7 @@ jobs:
           gh release download v10.0.9 --repo $env:GITHUB_REPOSITORY -p NghiaClient_V10.0.9_MiuMiuTimer_CaptchaClientCapture_Windows.zip -D base
           $zip='base/NghiaClient_V10.0.9_MiuMiuTimer_CaptchaClientCapture_Windows.zip'
           $got=(Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($got -ne '7154c0a1ef9e080c93dc81bf640fc9e0cdd2db6049b753277ee8ac7604fcdbbc') { throw "V10.0.9 base hash mismatch $got" }
+          if ($got -ne '6cffcaa02f416768986348dd418faad3ea89a7fba38f56cb000192cdee725751') { throw "V10.0.9 base hash mismatch $got" }
           Expand-Archive $zip -DestinationPath portable -Force
       - name: Install pytest
         run: python -m pip install pytest
