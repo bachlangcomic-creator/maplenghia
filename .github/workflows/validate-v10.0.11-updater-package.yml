@@ -1,0 +1,26 @@
+name: Validate V10.0.11 Updater Package Contract
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/validate-v10.0.11-updater-package.yml'
+      - 'build_input/v1011_package.py'
+      - 'build_input/v1011_release.py'
+      - 'build_input/test_v1011_update_package_contract.py'
+
+jobs:
+  updater-package-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Verify V10.0.11 updater ZIP contract
+        shell: pwsh
+        run: |
+          python -m pip install pytest
+          python -m pytest -q build_input/test_v1011_update_package_contract.py
