@@ -1,10 +1,10 @@
 {
-  "version": "10.0.10",
+  "version": "10.0.11",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.10/NghiaEdition_Update_v10.0.10.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.10/NghiaEdition_Update_v10.0.10.zip",
-  "sha256": "95a5a7e6d89374e80eb29fa6a2fa6276700efa9b36ebeb24e9ceee51f0abee98",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.11/NghiaEdition_Update_v10.0.11.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.11/NghiaEdition_Update_v10.0.11.zip",
+  "sha256": "dcfdfea7c05a14985d520858169a259d3e186fe340e922dff499397e72a42f03",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.10 is based on V10.0.9 and adds optional Custom Map parity controls: SIMPLE Human Behavior, B1/B3-style Fall Recovery, Spotify-style Loot Jitter, and independent Custom Map Adaptive Y. All four options default OFF. V10.0.9 MiuMiu timer and CAPTCHA client-area capture are preserved."
+  "notes": "V10.0.11 keeps all V10.0.10 Custom Map parity features and makes bottom-loot coordinates optional for V10 Custom Maps when Loot is SIMPLE or NONE. PIRATE_BOTTOM_CUSTOM still requires all four bottom-loot coordinates."
 }
