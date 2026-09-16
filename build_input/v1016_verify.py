@@ -64,7 +64,7 @@ required_strategy = [
     'def _post_sell_return_to_farm_step',
     'return_to_farm_pending',
     '_spotify_jump_down_reconstructed(cfg)',
-    'resolved.safe_entry[0]',
+    'profile["SAFE_ENTRY_X"]',
     'FALL_RECOVERY_BAND',
 ]
 for needle in required_strategy:
