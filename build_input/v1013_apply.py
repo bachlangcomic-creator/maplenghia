@@ -68,7 +68,7 @@ new = '''        if map_pos is None:\n            self.release_inputs()\n       
 if s.count(old) != 1:
     raise SystemExit("V10.0.13 sell-safe tick anchor mismatch")
 s = s.replace(old, new, 1)
-strategy_path.write_text(s, encoding="utf-8")
+strategy_path.write_bytes(s.encode("utf-8"))
 
 ui_path = APP / "nghia_spotify_nologin.py"
 u = normalized(ui_path)
@@ -77,7 +77,7 @@ if "V10.0.12" not in u and "10.0.12" not in u:
 u = u.replace("V10.0.12", "V10.0.13").replace("10.0.12", "10.0.13")
 if "10.0.12" in u:
     raise SystemExit("failed to replace all V10.0.12 UI version markers")
-ui_path.write_text(u, encoding="utf-8")
+ui_path.write_bytes(u.encode("utf-8"))
 
 (ROOT / "version.json").write_text(json.dumps({"version": VERSION}, indent=2) + "\n", encoding="utf-8")
 
