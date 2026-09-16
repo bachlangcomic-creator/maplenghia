@@ -98,7 +98,7 @@ report = {
     "maps_json_changed": False,
     "protected_core_changed": False,
     "updater_release_json_contract": True,
-    "feature_tests": 4,
+    "feature_tests": 5,
     "v1014_regressions": True,
     "v1013_regressions": True,
     "v1012_regressions": True,
