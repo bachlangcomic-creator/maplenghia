@@ -26,6 +26,11 @@ BASE = {
     "spotify_main_farm_orchestrator.py": "1404ef82297bf6af9e3e74df1b75a6915dfdf5b4e0c557de5027934649b25f68",
 }
 
+FINAL = {
+    "nghia_strategy_v10.py": "4bc8b651eb23e4b3d032e3f48f5c16afbd0969077bbf26576d64bbf8971ca578",
+    "nghia_spotify_nologin.py": "ca555f40f3d3bd3efbe0c80636c859ef5208077b9fb78dfc16977b71f03545a5",
+}
+
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -60,8 +65,9 @@ ui_path.write_bytes(u.encode("utf-8"))
 
 (ROOT / "version.json").write_text(json.dumps({"version": VERSION}, indent=2) + "\n", encoding="utf-8")
 
-final = {
-    "nghia_strategy_v10.py": sha(strategy_path),
-    "nghia_spotify_nologin.py": sha(ui_path),
-}
-print("V1015_PATCH_OK", final)
+for rel, expected in FINAL.items():
+    got = sha(APP / rel)
+    if got != expected:
+        raise SystemExit(f"unexpected V10.0.15 final hash {rel}: {got} != {expected}")
+
+print("V1015_PATCH_OK", FINAL)
