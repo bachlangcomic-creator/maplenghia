@@ -11,14 +11,14 @@ APP = Path(os.environ.get("NGHIA_APP_DIR", "portable/app_payload")).resolve()
 sys.path.insert(0, str(APP))
 
 
-def _profile():
+def _profile(enabled=True):
     from nghia_strategy_v10 import build_v10_pirate_profile
 
     return build_v10_pirate_profile(
         (10, 100), (100, 100), (50, 100),
         (10, 120), (100, 120), (35, 120), (75, 120),
         "SPOTIFY_COMBO", "NONE", "PIRATE_BOTTOM_CUSTOM", 0.6,
-        custom_simple_human=True,
+        custom_simple_human=enabled,
     )
 
 
@@ -49,12 +49,12 @@ class FakeHost:
         return True
 
 
-def _engine():
+def _engine(enabled=True):
     from nghia_strategy_v10 import V10StrategyEngine, resolve_v10_profile
 
     host = FakeHost()
     engine = V10StrategyEngine(host)
-    profile = _profile()
+    profile = _profile(enabled)
     engine.profile = dict(profile)
     engine.resolved = resolve_v10_profile(profile)
     engine.running = True
@@ -114,6 +114,20 @@ def test_probability_boundaries_are_2_rest_6_jump_92_continue(monkeypatch):
     host.behavior_engine.core.semantic_calls.clear()
     monkeypatch.setattr("nghia_strategy_v10.random.random", lambda: 0.08)
     assert engine._maybe_human_behavior({"jump_key": "SPACE"}, 50.0) is False
+    assert host.behavior_engine.core.semantic_calls == []
+
+
+def test_simple_human_off_remains_true_bypass(monkeypatch):
+    engine, host = _engine(enabled=False)
+    monkeypatch.setattr("nghia_strategy_v10.random.random", lambda: 0.0)
+
+    def should_not_randint(*args, **kwargs):
+        raise AssertionError("randint must not run while SIMPLE Human Behavior is OFF")
+
+    monkeypatch.setattr("nghia_strategy_v10.random.randint", should_not_randint)
+    assert engine._maybe_human_behavior({"jump_key": "SPACE"}, 10.0) is False
+    assert engine.human_pause_until == 0.0
+    assert host.release_calls == 0
     assert host.behavior_engine.core.semantic_calls == []
 
 
