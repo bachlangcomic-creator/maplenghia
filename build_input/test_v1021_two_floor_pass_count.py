@@ -1,7 +1,8 @@
 from pathlib import Path
+import os
 import sys
 
-APP = Path(__file__).resolve().parent / 'app_payload'
+APP = Path(os.environ.get('NGHIA_APP_DIR', Path(__file__).resolve().parent / 'app_payload')).resolve()
 sys.path.insert(0, str(APP))
 
 
