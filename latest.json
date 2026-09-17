@@ -1,10 +1,10 @@
 {
-  "version": "10.0.22",
+  "version": "10.0.23",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.22/NghiaEdition_Update_v10.0.22.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.22/NghiaEdition_Update_v10.0.22.zip",
-  "sha256": "ee9afe21b71896ee24a9f56b28461ffd7ecd5216b50cbbc49a2cf7166808d435",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.23/NghiaEdition_Update_v10.0.23.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.23/NghiaEdition_Update_v10.0.23.zip",
+  "sha256": "399a1cb2f55dbe3a83975a6094d1f06cec3a89d6d4b1485ed48a2d0a8fa53009",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.22 cleans up TWO FLOOR ROUTE setup: the top FARM/SAFE section shows only SAFE ENTRY and SAFE, while farming coordinates come exclusively from BOTTOM/TOP LEFT-RIGHT plus UP/DOWN POINT. TWO FLOOR also exposes SIMPLE Human Behavior, B1/B3 Fall Recovery, and Spotify Loot Jitter; the dedicated Two Floor Recovery remains separate. V10.0.21 pass count, V10.0.20 Edit Map, V10.0.19 CAPTCHA Scale Latch, and V10.0.18 MiuMiu Strict are preserved."
+  "notes": "V10.0.23 restores the natural V10.0.18-style run/attack cadence while TWO FLOOR travels horizontally toward UP_POINT or DOWN_POINT. Transition travel no longer consumes every combat tick; the movement direction is synchronized to the target, while vertical mismatch and WAIT_TOP/WAIT_BOTTOM remain safety-gated. V10.0.22 SAFE UI, V10.0.21 pass count, V10.0.20 Edit Map, V10.0.19 CAPTCHA Scale Latch, and V10.0.18 MiuMiu Strict are preserved."
 }
