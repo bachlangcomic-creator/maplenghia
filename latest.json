@@ -1,10 +1,10 @@
 {
-  "version": "10.0.19",
+  "version": "10.0.20",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.19/NghiaEdition_Update_v10.0.19.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.19/NghiaEdition_Update_v10.0.19.zip",
-  "sha256": "796eb81f90b3bd497aea96933f62ffcc76806efad86b742f8894004bcd16b2cc",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.20/NghiaEdition_Update_v10.0.20.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.20/NghiaEdition_Update_v10.0.20.zip",
+  "sha256": "3ba6081d47e7a7d9dad42dd63d80bfa23e54b19d36aff72f411b644e10fa6f54",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.19 keeps V10.0.18 MiuMiu Strict and improves Spotify-style CAPTCHA alerts: LIE_B64 is matched across scales 0.90/0.95/1.00/1.05/1.10 at the recovered 0.70 threshold, the alert fires once on APPEARED, and CAPTCHA pause clears only after 3 clean frames. QUESTION_CAPTCHA assets are not used as independent alarm triggers."
+  "notes": "V10.0.20 adds TWO FLOOR ROUTE with bottom/top LEFT-RIGHT lanes, UP/DOWN transition points, verified floor changes, recovery, selectable vertical actions, and optional change-per-leg behavior. Custom maps can now be loaded into the builder, edited, renamed, and saved in place. V10.0.19 CAPTCHA Scale Latch and V10.0.18 MiuMiu Strict are preserved."
 }
