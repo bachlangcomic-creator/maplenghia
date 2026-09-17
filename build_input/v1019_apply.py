@@ -73,7 +73,7 @@ def apply_hunks(path: Path, hunks) -> None:
                 raise SystemExit(f'unexpected patch line in {path.name}: {entry}')
         cursor = pos
     out.extend(src[cursor:])
-    path.write_text('\n'.join(out) + '\n', encoding='utf-8')
+    path.write_bytes(('\n'.join(out) + '\n').encode('utf-8'))
 
 
 def main() -> None:
