@@ -10,7 +10,7 @@ BASE_HASHES = {
     'nghia_spotify_nologin.py': '7937f97e60470df658fa505ed3b83d6f646a552e75978872a90ea01d57bd3886',
 }
 NEW_HASHES = {
-    'nghia_strategy_v10.py': 'dad6abc868177110457f4abc932971c5ab1422e900e0c607596248de380c98e8',
+    'nghia_strategy_v10.py': '366d185c4cb24be44aa911bf2df74cc1979dcb2fbb078a775eaf924248b7b370',
     'nghia_custom_map_profiles.py': '2a597efe900f2f53094e58ae663fded357fe03f10ccd65bb08ac9b0c50a282b8',
     'maple_nghia_pro.py': 'eeace378b61910d75d205d84dc342b7c1090908d2f9cfb67c1cbb4060dc9346b',
     'nghia_spotify_nologin.py': 'c863a6371ee292e60e36a59eff16346694c6885eb000ae86b56e4af8e0c1942d',
