@@ -1,10 +1,10 @@
 {
-  "version": "10.0.17",
+  "version": "10.0.18",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.17/NghiaEdition_Update_v10.0.17.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.17/NghiaEdition_Update_v10.0.17.zip",
-  "sha256": "91ec495c10bab3e187d934b2a4b1eb60a8712669db16da8cf8334957e8ed7399",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.18/NghiaEdition_Update_v10.0.18.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.18/NghiaEdition_Update_v10.0.18.zip",
+  "sha256": "08fec959a479ccd2ddc124ed7ee5a8b96ca97a10f8c9477260cf012ca14fb46f",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.17 is rebuilt from the verified V10.0.15 stable base. V10 Custom Map adds optional SAFE ENTRY for MiuMiu selling: move to SAFE ENTRY, UP+Jump, then verify SAFE before selling. After a successful MiuMiu sale, RETURN TO FARM aligns to SAFE_ENTRY_X on the upper SAFE floor, uses DOWN+Jump, confirms farm-lane Y, then resumes normal farming. The separate wrong-floor FARM RETURN feature is not included. Built-in maps and maps.json remain unchanged."
+  "notes": "V10.0.18 keeps V10.0.17 Custom SAFE ENTRY + Return To Farm and hardens MiuMiu selling: only MiuMiu uses verified double-left-click (80-120 ms inter-click, 10-30 ms hold); all other UI actions remain single-click. Shop opening is verified with MIUMIU_OPENED_B64 and retried at most once. Equip then ETC selling now requires strict Confirm appearance/click/disappearance, ETC failures propagate to the whole sale, and false-success paths are removed."
 }
