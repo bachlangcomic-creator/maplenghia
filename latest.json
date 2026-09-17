@@ -1,10 +1,10 @@
 {
-  "version": "10.0.18",
+  "version": "10.0.19",
   "channel": "stable",
-  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.18/NghiaEdition_Update_v10.0.18.zip",
-  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.18/NghiaEdition_Update_v10.0.18.zip",
-  "sha256": "08fec959a479ccd2ddc124ed7ee5a8b96ca97a10f8c9477260cf012ca14fb46f",
+  "package_url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.19/NghiaEdition_Update_v10.0.19.zip",
+  "url": "https://github.com/bachlangcomic-creator/maplenghia/releases/download/v10.0.19/NghiaEdition_Update_v10.0.19.zip",
+  "sha256": "796eb81f90b3bd497aea96933f62ffcc76806efad86b742f8894004bcd16b2cc",
   "payload_dir": "app_payload",
   "min_launcher_version": "1.0.1",
-  "notes": "V10.0.18 keeps V10.0.17 Custom SAFE ENTRY + Return To Farm and hardens MiuMiu selling: only MiuMiu uses verified double-left-click (80-120 ms inter-click, 10-30 ms hold); all other UI actions remain single-click. Shop opening is verified with MIUMIU_OPENED_B64 and retried at most once. Equip then ETC selling now requires strict Confirm appearance/click/disappearance, ETC failures propagate to the whole sale, and false-success paths are removed."
+  "notes": "V10.0.19 keeps V10.0.18 MiuMiu Strict and improves Spotify-style CAPTCHA alerts: LIE_B64 is matched across scales 0.90/0.95/1.00/1.05/1.10 at the recovered 0.70 threshold, the alert fires once on APPEARED, and CAPTCHA pause clears only after 3 clean frames. QUESTION_CAPTCHA assets are not used as independent alarm triggers."
 }
