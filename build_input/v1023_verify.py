@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib, sys
 
 EXPECTED = {
-    'nghia_strategy_v10.py': '8bb3a1b00498b4e19286d91b31251797958774c8b9b5482c4602dd5b9196c5a1',
+    'nghia_strategy_v10.py': '403cfdce5bd33abd2957f3fac0e1e9af075cc37827382eccd2e8c361e85617f5',
     'nghia_custom_map_profiles.py': '36042a844b7dac77d62ab60b163e29942226111b467504d72130e12df446662b',
     'maple_nghia_pro.py': '395b8c0c7a12c981905eed4a3ab2d8ffb60be781ffa29e11437b18dff6c6253f',
     'nghia_spotify_nologin.py': 'c080647a228dcf77fb7a7720dced83b59ab38e9fa756851bab0ea96ed8485c89',
@@ -38,7 +38,7 @@ def main() -> None:
         'Keep the V10.0.18 run/attack cadence while travelling horizontally',
         'arrived = abs(dx) <= 3.0 and abs(dy) <= 5.0',
         'self.direction = 1 if dx > 0.0 else -1',
-        'Do not consume the boundary tick.',
+        'tick() recognizes this specific FARM -> MOVE',
         'TWO_FLOOR_PASSES_PER_FLOOR',
     ]:
         if marker not in strategy: raise SystemExit(f'missing V10.0.23 strategy marker: {marker}')

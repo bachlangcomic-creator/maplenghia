@@ -10,7 +10,7 @@ BASE_HASHES = {
     'nghia_spotify_nologin.py': 'd378f82ac6bade026dff3bdfac744c17c220029fe9118fb9fa41b3e402f2aa85',
 }
 NEW_HASHES = {
-    'nghia_strategy_v10.py': '8bb3a1b00498b4e19286d91b31251797958774c8b9b5482c4602dd5b9196c5a1',
+    'nghia_strategy_v10.py': '403cfdce5bd33abd2957f3fac0e1e9af075cc37827382eccd2e8c361e85617f5',
     'nghia_spotify_nologin.py': 'c080647a228dcf77fb7a7720dced83b59ab38e9fa756851bab0ea96ed8485c89',
 }
 PATCH_PART_DIR = Path(__file__).resolve().parent / 'patch_parts1023'
